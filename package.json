@@ -1,0 +1,11 @@
+{
+  "name": "@izumin5210/coding-on-modal",
+  "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "type": "module",
+  "devDependencies": {
+    "@biomejs/biome": "2.4.2",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}
