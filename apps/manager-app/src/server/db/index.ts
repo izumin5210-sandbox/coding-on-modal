@@ -15,7 +15,6 @@ function init(dbInstance: Database.Database): void {
       repo_ref TEXT NOT NULL,
       status TEXT NOT NULL,
       workspace_path TEXT NOT NULL,
-      terminal_url TEXT,
       last_error TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL

@@ -13,7 +13,6 @@ type SessionRow = {
   repo_ref: string;
   status: SessionStatus;
   workspace_path: string;
-  terminal_url: string | null;
   created_at: string;
   updated_at: string;
   last_error: string | null;
@@ -28,7 +27,6 @@ function toSessionRecord(row: SessionRow): SessionStoreRecord {
     repoRef: row.repo_ref,
     status: row.status,
     workspacePath: row.workspace_path,
-    terminalUrl: row.terminal_url ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastError: row.last_error ?? undefined,
@@ -61,11 +59,10 @@ export function insertSession(record: SessionStoreRecord): void {
         repo_ref,
         status,
         workspace_path,
-        terminal_url,
         last_error,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     )
     .run(
@@ -76,7 +73,6 @@ export function insertSession(record: SessionStoreRecord): void {
       record.repoRef,
       record.status,
       record.workspacePath,
-      record.terminalUrl ?? null,
       record.lastError ?? null,
       record.createdAt,
       record.updatedAt,
@@ -109,7 +105,6 @@ export function updateSession(
         repo_ref = ?,
         status = ?,
         workspace_path = ?,
-        terminal_url = ?,
         last_error = ?,
         updated_at = ?
       WHERE id = ?
@@ -122,7 +117,6 @@ export function updateSession(
       next.repoRef,
       next.status,
       next.workspacePath,
-      next.terminalUrl ?? null,
       next.lastError ?? null,
       next.updatedAt,
       id,

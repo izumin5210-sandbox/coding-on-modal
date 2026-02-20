@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { NotFoundError } from "modal";
+import { NotFoundError, type Secret } from "modal";
 import type {
+  AgentSessionInput,
   CreateSessionInput,
   ExecSessionInput,
   SessionExecResult,
@@ -20,6 +21,29 @@ import {
 } from "@/server/sessions/store";
 
 const WORKSPACE_PATH = "/workspace/repo";
+const AGENT_SDK_WORKDIR = "/opt/agent-sdk";
+const AGENT_RUNNER_SOURCE = `
+import { query } from "@anthropic-ai/claude-agent-sdk";
+
+const prompt = process.env.AGENT_PROMPT ?? "";
+const cwd = process.env.AGENT_CWD ?? process.cwd();
+const maxTurns = Number(process.env.AGENT_MAX_TURNS ?? "8");
+
+if (!prompt.trim()) {
+  console.error("AGENT_PROMPT is empty");
+  process.exit(2);
+}
+
+const options = {
+  cwd,
+  maxTurns,
+  permissionMode: "bypassPermissions",
+};
+
+for await (const message of query({ prompt, options })) {
+  process.stdout.write(JSON.stringify(message) + "\\n");
+}
+`;
 
 export class SessionError extends Error {
   constructor(
@@ -42,7 +66,6 @@ function toPublic(record: SessionStoreRecord): SessionRecord {
     repoRef: record.repoRef,
     status: record.status,
     workspacePath: record.workspacePath,
-    terminalUrl: record.terminalUrl,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     lastError: record.lastError,
@@ -97,15 +120,24 @@ async function refreshStatus(
 async function runCommand(
   providerSessionId: string,
   command: string[],
-  params?: { cwd?: string; pty?: boolean },
+  params?: {
+    workdir?: string;
+    pty?: boolean;
+    timeoutMs?: number;
+    env?: Record<string, string>;
+    secrets?: Secret[];
+  },
 ): Promise<SessionExecResult> {
   const providerSession =
     await getModalClient().sandboxes.fromId(providerSessionId);
   const process = await providerSession.exec(command, {
     stdout: "pipe",
     stderr: "pipe",
-    workdir: params?.cwd,
+    workdir: params?.workdir,
     pty: params?.pty,
+    timeoutMs: params?.timeoutMs,
+    env: params?.env,
+    secrets: params?.secrets,
   });
 
   const [exitCode, stdout, stderr] = await Promise.all([
@@ -146,7 +178,6 @@ export async function createSession(
     name,
     timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
     idleTimeoutMs: env.SANDBOX_IDLE_TIMEOUT_MINUTES * 60_000,
-    encryptedPorts: [env.SANDBOX_TTYD_PORT],
   });
 
   let status: SessionStatus = "running";
@@ -185,7 +216,6 @@ export async function createSession(
     repoRef,
     status,
     workspacePath: WORKSPACE_PATH,
-    terminalUrl: undefined,
     createdAt: now,
     updatedAt: now,
     lastError,
@@ -232,48 +262,6 @@ export async function deleteSessionRecord(id: string): Promise<boolean> {
   return deleteSession(id);
 }
 
-export async function openSessionTerminal(id: string): Promise<SessionRecord> {
-  const env = getEnv();
-  const record = await mustGetSession(id);
-  if (record.status === "terminated") {
-    throw new SessionError("Session is already terminated", 409);
-  }
-
-  const providerSession = await getModalClient().sandboxes.fromId(
-    record.providerSessionId,
-  );
-  const startupCommand = [
-    "sh",
-    "-lc",
-    `if ! pgrep -x ttyd >/dev/null 2>&1; then nohup ttyd -W -p ${env.SANDBOX_TTYD_PORT} bash >/tmp/ttyd.log 2>&1 & fi`,
-  ];
-
-  const startupResult = await runCommand(
-    providerSession.sandboxId,
-    startupCommand,
-  );
-  if (startupResult.exitCode !== 0) {
-    throw new SessionError(
-      startupResult.stderr || "Failed to start terminal",
-      500,
-    );
-  }
-
-  const tunnels = await providerSession.tunnels(20_000);
-  const tunnel = tunnels[env.SANDBOX_TTYD_PORT];
-  if (!tunnel?.url) {
-    throw new SessionError("Failed to expose terminal tunnel", 500);
-  }
-
-  const updated =
-    updateSession(id, {
-      terminalUrl: tunnel.url,
-      status: "running",
-    }) ?? record;
-
-  return toPublic(updated);
-}
-
 export async function executeInSession(
   id: string,
   input: ExecSessionInput,
@@ -290,9 +278,65 @@ export async function executeInSession(
 
   try {
     return await runCommand(record.providerSessionId, ["sh", "-lc", command], {
-      cwd: input.cwd?.trim() || record.workspacePath,
+      workdir: input.cwd?.trim() || record.workspacePath,
       pty: input.pty ?? true,
     });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      updateSession(id, { status: "terminated" });
+      throw new SessionError("Session no longer exists", 409);
+    }
+
+    throw error;
+  }
+}
+
+export async function runAgentInSession(
+  id: string,
+  input: AgentSessionInput,
+): Promise<SessionExecResult> {
+  const env = getEnv();
+  if (!env.ANTHROPIC_API_KEY) {
+    throw new SessionError(
+      "ANTHROPIC_API_KEY is required to run the Claude Agent SDK",
+      400,
+    );
+  }
+
+  const record = await mustGetSession(id);
+  if (record.status === "terminated") {
+    throw new SessionError("Session is terminated", 409);
+  }
+
+  const prompt = input.prompt.trim();
+  if (!prompt) {
+    throw new SessionError("prompt must not be empty", 400);
+  }
+
+  const maxTurns = Math.min(
+    20,
+    Math.max(1, input.maxTurns ?? env.AGENT_MAX_TURNS),
+  );
+  const secret = await getModalClient().secrets.fromObject({
+    ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+  });
+
+  try {
+    return await runCommand(
+      record.providerSessionId,
+      ["node", "--input-type=module", "-e", AGENT_RUNNER_SOURCE],
+      {
+        workdir: AGENT_SDK_WORKDIR,
+        pty: false,
+        timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
+        env: {
+          AGENT_PROMPT: prompt,
+          AGENT_CWD: input.cwd?.trim() || record.workspacePath,
+          AGENT_MAX_TURNS: String(maxTurns),
+        },
+        secrets: [secret],
+      },
+    );
   } catch (error) {
     if (error instanceof NotFoundError) {
       updateSession(id, { status: "terminated" });

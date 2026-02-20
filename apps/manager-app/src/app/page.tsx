@@ -17,11 +17,6 @@ type SessionResponse = {
   session: SessionRecord;
 };
 
-type TerminalResponse = {
-  session: SessionRecord;
-  terminalUrl?: string;
-};
-
 type ExecResponse = {
   result: SessionExecResult;
 };
@@ -51,6 +46,10 @@ export default function Home() {
   });
 
   const [command, setCommand] = useState("pwd && ls -la");
+  const [agentPrompt, setAgentPrompt] = useState(
+    "Summarize this repository and suggest one high-impact improvement.",
+  );
+  const [agentMaxTurns, setAgentMaxTurns] = useState("8");
   const [cwd, setCwd] = useState("/workspace/repo");
   const [execResult, setExecResult] = useState<SessionExecResult | null>(null);
 
@@ -233,41 +232,41 @@ export default function Home() {
     }
   }
 
-  async function openTerminal() {
+  async function runAgent(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
     if (!selectedId) {
       return;
     }
 
-    setBusy("terminal");
+    setBusy("agent");
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${selectedId}/terminal`, {
+      const maxTurnsNumber = Number(agentMaxTurns);
+      const response = await fetch(`/api/sessions/${selectedId}/agent`, {
         method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          prompt: agentPrompt,
+          cwd: cwd.trim() || undefined,
+          maxTurns: Number.isFinite(maxTurnsNumber)
+            ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
+            : undefined,
+        }),
       });
 
       if (!response.ok) {
         throw new Error(await parseError(response));
       }
 
-      const body = (await response.json()) as TerminalResponse;
-      setSessions((current) =>
-        current.map((session) =>
-          session.id === body.session.id ? body.session : session,
-        ),
-      );
-
-      if (body.terminalUrl) {
-        window.open(body.terminalUrl, "_blank", "noopener,noreferrer");
-        setMessage("Terminal opened in a new tab. Run `claude login` there.");
-      } else {
-        setMessage("Terminal endpoint started.");
-      }
-    } catch (terminalError) {
+      const body = (await response.json()) as ExecResponse;
+      setExecResult(body.result);
+      setMessage(`Agent finished with exit code ${body.result.exitCode}`);
+      await refreshSelected();
+    } catch (agentError) {
       setError(
-        terminalError instanceof Error
-          ? terminalError.message
-          : String(terminalError),
+        agentError instanceof Error ? agentError.message : String(agentError),
       );
     } finally {
       setBusy(null);
@@ -327,8 +326,8 @@ export default function Home() {
             Cloud Development Sessions
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Create sessions, open web terminal for <code>claude login</code>,
-            and run commands in
+            Create sessions, run Claude Agent SDK prompts, and execute commands
+            in
             <code> /workspace/repo</code>.
           </p>
         </header>
@@ -475,16 +474,6 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={openTerminal}
-                      disabled={
-                        busy !== null || selectedSession.status === "terminated"
-                      }
-                      className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Open Terminal
-                    </button>
-                    <button
-                      type="button"
                       onClick={terminateSession}
                       disabled={
                         busy !== null || selectedSession.status === "terminated"
@@ -536,6 +525,36 @@ export default function Home() {
                     {selectedSession.lastError}
                   </p>
                 ) : null}
+
+                <form onSubmit={runAgent} className="mt-4 space-y-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">
+                    Run Claude Agent SDK
+                  </h3>
+                  <textarea
+                    value={agentPrompt}
+                    onChange={(event) => setAgentPrompt(event.target.value)}
+                    rows={4}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none transition focus:border-slate-500"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      value={agentMaxTurns}
+                      onChange={(event) => setAgentMaxTurns(event.target.value)}
+                      className="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500"
+                      placeholder="max turns"
+                      inputMode="numeric"
+                    />
+                    <button
+                      type="submit"
+                      disabled={
+                        busy !== null || selectedSession.status === "terminated"
+                      }
+                      className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {busy === "agent" ? "Running..." : "Run Agent"}
+                    </button>
+                  </div>
+                </form>
 
                 <form onSubmit={runCommand} className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">

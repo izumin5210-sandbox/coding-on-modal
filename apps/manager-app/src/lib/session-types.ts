@@ -7,7 +7,6 @@ export type SessionRecord = {
   repoRef: string;
   status: SessionStatus;
   workspacePath: string;
-  terminalUrl?: string;
   createdAt: string;
   updatedAt: string;
   lastError?: string;
@@ -29,4 +28,10 @@ export type ExecSessionInput = {
   cmd: string;
   cwd?: string;
   pty?: boolean;
+};
+
+export type AgentSessionInput = {
+  prompt: string;
+  cwd?: string;
+  maxTurns?: number;
 };
