@@ -38,12 +38,24 @@ const options = {
   cwd,
   maxTurns,
   permissionMode: "bypassPermissions",
+  allowDangerouslySkipPermissions: true,
 };
 
 for await (const message of query({ prompt, options })) {
   process.stdout.write(JSON.stringify(message) + "\\n");
 }
 `;
+
+function resolveSingleUserAuthToken(
+  env: ReturnType<typeof getEnv>,
+): string | null {
+  return (
+    env.SESSION_USER_AUTH_TOKEN ??
+    env.ANTHROPIC_AUTH_TOKEN ??
+    env.CLAUDE_CODE_OAUTH_TOKEN ??
+    null
+  );
+}
 
 export class SessionError extends Error {
   constructor(
@@ -296,9 +308,10 @@ export async function runAgentInSession(
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
   const env = getEnv();
-  if (!env.ANTHROPIC_API_KEY) {
+  const authToken = resolveSingleUserAuthToken(env);
+  if (!authToken) {
     throw new SessionError(
-      "ANTHROPIC_API_KEY is required to run the Claude Agent SDK",
+      "SESSION_USER_AUTH_TOKEN (or ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN) is required",
       400,
     );
   }
@@ -318,7 +331,8 @@ export async function runAgentInSession(
     Math.max(1, input.maxTurns ?? env.AGENT_MAX_TURNS),
   );
   const secret = await getModalClient().secrets.fromObject({
-    ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+    ANTHROPIC_AUTH_TOKEN: authToken,
+    CLAUDE_CODE_OAUTH_TOKEN: authToken,
   });
 
   try {

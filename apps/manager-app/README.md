@@ -9,8 +9,11 @@ Create `apps/manager-app/.env.local`:
 ```bash
 MODAL_TOKEN_ID=ak-...
 MODAL_TOKEN_SECRET=as-...
-ANTHROPIC_API_KEY=sk-ant-...
+SESSION_USER_AUTH_TOKEN=your-claude-setup-token
 ```
+
+`SESSION_USER_AUTH_TOKEN` is the single-user token for now.  
+Generate it with `claude setup-token` on the user account that owns the Claude subscription.
 
 Optional:
 
@@ -36,5 +39,5 @@ Open `http://localhost:3000`.
 ## Session flow
 
 1. Create a Session from UI.
-2. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session).
+2. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
 3. Run shell commands from the manager UI.

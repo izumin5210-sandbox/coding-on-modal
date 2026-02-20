@@ -5,7 +5,9 @@ import { z } from "zod";
 const envSchema = z.object({
   MODAL_TOKEN_ID: z.string().min(1, "MODAL_TOKEN_ID is required"),
   MODAL_TOKEN_SECRET: z.string().min(1, "MODAL_TOKEN_SECRET is required"),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  SESSION_USER_AUTH_TOKEN: z.string().min(1).optional(),
+  ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1).optional(),
   MODAL_ENVIRONMENT: z.string().min(1).optional(),
   MODAL_APP_NAME: z.string().default("coding-on-modal-session-manager"),
   DEFAULT_REPO_URL: z
