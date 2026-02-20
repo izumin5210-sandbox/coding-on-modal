@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import { executeInSession, SessionError } from "@/server/sessions/service";
 
@@ -20,10 +21,11 @@ const execSchema = z.object({
 
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
+  const db = getDb();
 
   try {
     const input = execSchema.parse(await request.json());
-    const result = await executeInSession(id, input);
+    const result = await executeInSession(db, id, input);
     return NextResponse.json({ result });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -8,6 +8,7 @@ import type {
   SessionRecord,
   SessionStatus,
 } from "@/lib/session-types";
+import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
 import { getSessionImage } from "@/server/modal/image";
@@ -89,6 +90,7 @@ function notFound(id: string): SessionError {
 }
 
 async function refreshStatus(
+  db: AppDb,
   record: SessionStoreRecord,
 ): Promise<SessionStoreRecord> {
   const modal = getModalClient();
@@ -108,7 +110,7 @@ async function refreshStatus(
 
     if (nextStatus !== record.status) {
       return (
-        updateSession(record.id, {
+        updateSession(db, record.id, {
           status: nextStatus,
         }) ?? record
       );
@@ -118,7 +120,7 @@ async function refreshStatus(
   } catch (error) {
     if (error instanceof NotFoundError) {
       return (
-        updateSession(record.id, {
+        updateSession(db, record.id, {
           status: "terminated",
           lastError: record.lastError,
         }) ?? record
@@ -165,16 +167,20 @@ async function runCommand(
   };
 }
 
-async function mustGetSession(id: string): Promise<SessionStoreRecord> {
-  const record = getSession(id);
+async function mustGetSession(
+  db: AppDb,
+  id: string,
+): Promise<SessionStoreRecord> {
+  const record = getSession(db, id);
   if (!record) {
     throw notFound(id);
   }
 
-  return refreshStatus(record);
+  return refreshStatus(db, record);
 }
 
 export async function createSession(
+  db: AppDb,
   input: CreateSessionInput,
 ): Promise<SessionRecord> {
   const env = getEnv();
@@ -233,23 +239,27 @@ export async function createSession(
     lastError,
   };
 
-  insertSession(record);
+  insertSession(db, record);
   return toPublic(record);
 }
 
-export async function listSessionRecords(): Promise<SessionRecord[]> {
-  return listSessions().map(toPublic);
+export async function listSessionRecords(db: AppDb): Promise<SessionRecord[]> {
+  return listSessions(db).map(toPublic);
 }
 
-export async function getSessionRecord(id: string): Promise<SessionRecord> {
-  const record = await mustGetSession(id);
+export async function getSessionRecord(
+  db: AppDb,
+  id: string,
+): Promise<SessionRecord> {
+  const record = await mustGetSession(db, id);
   return toPublic(record);
 }
 
 export async function terminateSessionRecord(
+  db: AppDb,
   id: string,
 ): Promise<SessionRecord> {
-  const record = await mustGetSession(id);
+  const record = await mustGetSession(db, id);
 
   try {
     const providerSession = await getModalClient().sandboxes.fromId(
@@ -263,22 +273,26 @@ export async function terminateSessionRecord(
   }
 
   const updated =
-    updateSession(id, {
+    updateSession(db, id, {
       status: "terminated",
     }) ?? record;
 
   return toPublic(updated);
 }
 
-export async function deleteSessionRecord(id: string): Promise<boolean> {
-  return deleteSession(id);
+export async function deleteSessionRecord(
+  db: AppDb,
+  id: string,
+): Promise<boolean> {
+  return deleteSession(db, id);
 }
 
 export async function executeInSession(
+  db: AppDb,
   id: string,
   input: ExecSessionInput,
 ): Promise<SessionExecResult> {
-  const record = await mustGetSession(id);
+  const record = await mustGetSession(db, id);
   if (record.status === "terminated") {
     throw new SessionError("Session is terminated", 409);
   }
@@ -295,7 +309,7 @@ export async function executeInSession(
     });
   } catch (error) {
     if (error instanceof NotFoundError) {
-      updateSession(id, { status: "terminated" });
+      updateSession(db, id, { status: "terminated" });
       throw new SessionError("Session no longer exists", 409);
     }
 
@@ -304,6 +318,7 @@ export async function executeInSession(
 }
 
 export async function runAgentInSession(
+  db: AppDb,
   id: string,
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
@@ -316,7 +331,7 @@ export async function runAgentInSession(
     );
   }
 
-  const record = await mustGetSession(id);
+  const record = await mustGetSession(db, id);
   if (record.status === "terminated") {
     throw new SessionError("Session is terminated", 409);
   }
@@ -353,7 +368,7 @@ export async function runAgentInSession(
     );
   } catch (error) {
     if (error instanceof NotFoundError) {
-      updateSession(id, { status: "terminated" });
+      updateSession(db, id, { status: "terminated" });
       throw new SessionError("Session no longer exists", 409);
     }
 

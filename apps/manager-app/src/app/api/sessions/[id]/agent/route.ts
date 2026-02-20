@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import { runAgentInSession, SessionError } from "@/server/sessions/service";
 
@@ -20,10 +21,11 @@ const agentSchema = z.object({
 
 export async function POST(request: Request, { params }: Params) {
   const { id } = await params;
+  const db = getDb();
 
   try {
     const input = agentSchema.parse(await request.json());
-    const result = await runAgentInSession(id, input);
+    const result = await runAgentInSession(db, id, input);
     return NextResponse.json({ result });
   } catch (error) {
     if (error instanceof z.ZodError) {

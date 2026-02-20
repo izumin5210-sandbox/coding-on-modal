@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
   deleteSessionRecord,
@@ -17,8 +18,9 @@ type Params = {
 
 export async function GET(_: Request, { params }: Params) {
   const { id } = await params;
+  const db = getDb();
   try {
-    const session = await getSessionRecord(id);
+    const session = await getSessionRecord(db, id);
     return NextResponse.json({ session });
   } catch (error) {
     if (error instanceof SessionError) {
@@ -33,8 +35,9 @@ export async function GET(_: Request, { params }: Params) {
 
 export async function DELETE(_: Request, { params }: Params) {
   const { id } = await params;
+  const db = getDb();
   try {
-    const deleted = await deleteSessionRecord(id);
+    const deleted = await deleteSessionRecord(db, id);
     if (!deleted) {
       return jsonError(404, `Session not found: ${id}`);
     }

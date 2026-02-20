@@ -1,89 +1,65 @@
-import type { SessionRecord, SessionStatus } from "@/lib/session-types";
-import { getDb } from "@/server/db";
+import { desc, eq } from "drizzle-orm";
+import type { SessionRecord } from "@/lib/session-types";
+import type { AppDb } from "@/server/db";
+import type { SessionRow } from "@/server/db/schema";
+import { sessions } from "@/server/db/schema";
 
 export type SessionStoreRecord = SessionRecord & {
   providerSessionId: string;
 };
 
-type SessionRow = {
-  id: string;
-  provider_session_id: string;
-  name: string;
-  repo_url: string;
-  repo_ref: string;
-  status: SessionStatus;
-  workspace_path: string;
-  created_at: string;
-  updated_at: string;
-  last_error: string | null;
-};
-
 function toSessionRecord(row: SessionRow): SessionStoreRecord {
   return {
     id: row.id,
-    providerSessionId: row.provider_session_id,
+    providerSessionId: row.providerSessionId,
     name: row.name,
-    repoUrl: row.repo_url,
-    repoRef: row.repo_ref,
+    repoUrl: row.repoUrl,
+    repoRef: row.repoRef,
     status: row.status,
-    workspacePath: row.workspace_path,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastError: row.last_error ?? undefined,
+    workspacePath: row.workspacePath,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    lastError: row.lastError ?? undefined,
   };
 }
 
-export function listSessions(): SessionStoreRecord[] {
-  const rows = getDb()
-    .prepare("SELECT * FROM sessions ORDER BY datetime(updated_at) DESC")
-    .all() as SessionRow[];
+export function listSessions(db: AppDb): SessionStoreRecord[] {
+  const rows = db
+    .select()
+    .from(sessions)
+    .orderBy(desc(sessions.updatedAt))
+    .all();
   return rows.map(toSessionRecord);
 }
 
-export function getSession(id: string): SessionStoreRecord | null {
-  const row = getDb().prepare("SELECT * FROM sessions WHERE id = ?").get(id) as
-    | SessionRow
-    | undefined;
+export function getSession(db: AppDb, id: string): SessionStoreRecord | null {
+  const row = db.select().from(sessions).where(eq(sessions.id, id)).get();
   return row ? toSessionRecord(row) : null;
 }
 
-export function insertSession(record: SessionStoreRecord): void {
-  getDb()
-    .prepare(
-      `
-      INSERT INTO sessions (
-        id,
-        provider_session_id,
-        name,
-        repo_url,
-        repo_ref,
-        status,
-        workspace_path,
-        last_error,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-    )
-    .run(
-      record.id,
-      record.providerSessionId,
-      record.name,
-      record.repoUrl,
-      record.repoRef,
-      record.status,
-      record.workspacePath,
-      record.lastError ?? null,
-      record.createdAt,
-      record.updatedAt,
-    );
+export function insertSession(db: AppDb, record: SessionStoreRecord): void {
+  db.insert(sessions)
+    .values({
+      id: record.id,
+      providerSessionId: record.providerSessionId,
+      name: record.name,
+      repoUrl: record.repoUrl,
+      repoRef: record.repoRef,
+      status: record.status,
+      workspacePath: record.workspacePath,
+      lastError: record.lastError ?? null,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    })
+    .run();
 }
 
 export function updateSession(
+  db: AppDb,
   id: string,
   updates: Partial<Omit<SessionStoreRecord, "id" | "createdAt">>,
 ): SessionStoreRecord | null {
-  const current = getSession(id);
+  const current = getSession(db, id);
   if (!current) {
     return null;
   }
@@ -94,38 +70,24 @@ export function updateSession(
     updatedAt: new Date().toISOString(),
   };
 
-  getDb()
-    .prepare(
-      `
-      UPDATE sessions
-      SET
-        provider_session_id = ?,
-        name = ?,
-        repo_url = ?,
-        repo_ref = ?,
-        status = ?,
-        workspace_path = ?,
-        last_error = ?,
-        updated_at = ?
-      WHERE id = ?
-      `,
-    )
-    .run(
-      next.providerSessionId,
-      next.name,
-      next.repoUrl,
-      next.repoRef,
-      next.status,
-      next.workspacePath,
-      next.lastError ?? null,
-      next.updatedAt,
-      id,
-    );
+  db.update(sessions)
+    .set({
+      providerSessionId: next.providerSessionId,
+      name: next.name,
+      repoUrl: next.repoUrl,
+      repoRef: next.repoRef,
+      status: next.status,
+      workspacePath: next.workspacePath,
+      lastError: next.lastError ?? null,
+      updatedAt: next.updatedAt,
+    })
+    .where(eq(sessions.id, id))
+    .run();
 
   return next;
 }
 
-export function deleteSession(id: string): boolean {
-  const result = getDb().prepare("DELETE FROM sessions WHERE id = ?").run(id);
+export function deleteSession(db: AppDb, id: string): boolean {
+  const result = db.delete(sessions).where(eq(sessions.id, id)).run();
   return result.changes > 0;
 }

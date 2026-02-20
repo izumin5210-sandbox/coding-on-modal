@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
   SessionError,
@@ -16,9 +17,10 @@ type Params = {
 
 export async function POST(_: Request, { params }: Params) {
   const { id } = await params;
+  const db = getDb();
 
   try {
-    const session = await terminateSessionRecord(id);
+    const session = await terminateSessionRecord(db, id);
     return NextResponse.json({ session });
   } catch (error) {
     if (error instanceof SessionError) {

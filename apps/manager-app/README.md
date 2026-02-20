@@ -31,10 +31,20 @@ SESSION_DB_PATH=apps/manager-app/data/manager.db
 ## Run
 
 ```bash
+pnpm --filter manager-app db:migrate
 pnpm --filter manager-app dev
 ```
 
 Open `http://localhost:3000`.
+
+## Database workflow
+
+- ORM: Drizzle ORM v1 beta (`drizzle-orm` + `drizzle-kit`).
+- Runtime: API handlers acquire DB and inject it into service/store layers.
+- Schema change flow:
+  1. Update `src/server/db/schema.ts`.
+  2. Run `pnpm --filter manager-app db:generate`.
+  3. Run `pnpm --filter manager-app db:migrate`.
 
 ## Session flow
 

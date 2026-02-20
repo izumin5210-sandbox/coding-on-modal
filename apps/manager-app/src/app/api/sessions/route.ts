@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
   createSession,
@@ -17,8 +18,9 @@ const createSchema = z.object({
 });
 
 export async function GET() {
+  const db = getDb();
   try {
-    const sessions = await listSessionRecords();
+    const sessions = await listSessionRecords(db);
     return NextResponse.json({ sessions });
   } catch (error) {
     return jsonError(
@@ -29,9 +31,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const db = getDb();
   try {
     const input = createSchema.parse(await request.json());
-    const session = await createSession(input);
+    const session = await createSession(db, input);
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
