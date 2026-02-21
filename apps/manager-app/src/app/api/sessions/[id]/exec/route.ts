@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { AuthError, requireAuthenticatedUser } from "@/server/auth/session";
 import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import { executeInSession, SessionError } from "@/server/sessions/service";
@@ -24,8 +25,9 @@ export async function POST(request: Request, { params }: Params) {
   const db = getDb();
 
   try {
+    const user = requireAuthenticatedUser(db, request);
     const input = execSchema.parse(await request.json());
-    const result = await executeInSession(db, id, input);
+    const result = await executeInSession(db, user.id, id, input);
     return NextResponse.json({ result });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -35,6 +37,9 @@ export async function POST(request: Request, { params }: Params) {
       );
     }
     if (error instanceof SessionError) {
+      return jsonError(error.statusCode, error.message);
+    }
+    if (error instanceof AuthError) {
       return jsonError(error.statusCode, error.message);
     }
 

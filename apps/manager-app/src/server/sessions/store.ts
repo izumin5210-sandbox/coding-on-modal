@@ -1,16 +1,18 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { SessionRecord } from "@/lib/session-types";
 import type { AppDb } from "@/server/db";
 import type { SessionRow } from "@/server/db/schema";
 import { sessions } from "@/server/db/schema";
 
 export type SessionStoreRecord = SessionRecord & {
+  ownerUserId: string;
   providerSessionId: string;
 };
 
 function toSessionRecord(row: SessionRow): SessionStoreRecord {
   return {
     id: row.id,
+    ownerUserId: row.ownerUserId,
     providerSessionId: row.providerSessionId,
     name: row.name,
     repoUrl: row.repoUrl,
@@ -23,17 +25,29 @@ function toSessionRecord(row: SessionRow): SessionStoreRecord {
   };
 }
 
-export function listSessions(db: AppDb): SessionStoreRecord[] {
+export function listSessions(
+  db: AppDb,
+  ownerUserId: string,
+): SessionStoreRecord[] {
   const rows = db
     .select()
     .from(sessions)
+    .where(eq(sessions.ownerUserId, ownerUserId))
     .orderBy(desc(sessions.updatedAt))
     .all();
   return rows.map(toSessionRecord);
 }
 
-export function getSession(db: AppDb, id: string): SessionStoreRecord | null {
-  const row = db.select().from(sessions).where(eq(sessions.id, id)).get();
+export function getSession(
+  db: AppDb,
+  ownerUserId: string,
+  id: string,
+): SessionStoreRecord | null {
+  const row = db
+    .select()
+    .from(sessions)
+    .where(and(eq(sessions.id, id), eq(sessions.ownerUserId, ownerUserId)))
+    .get();
   return row ? toSessionRecord(row) : null;
 }
 
@@ -41,6 +55,7 @@ export function insertSession(db: AppDb, record: SessionStoreRecord): void {
   db.insert(sessions)
     .values({
       id: record.id,
+      ownerUserId: record.ownerUserId,
       providerSessionId: record.providerSessionId,
       name: record.name,
       repoUrl: record.repoUrl,
@@ -56,10 +71,13 @@ export function insertSession(db: AppDb, record: SessionStoreRecord): void {
 
 export function updateSession(
   db: AppDb,
+  ownerUserId: string,
   id: string,
-  updates: Partial<Omit<SessionStoreRecord, "id" | "createdAt">>,
+  updates: Partial<
+    Omit<SessionStoreRecord, "id" | "ownerUserId" | "createdAt">
+  >,
 ): SessionStoreRecord | null {
-  const current = getSession(db, id);
+  const current = getSession(db, ownerUserId, id);
   if (!current) {
     return null;
   }
@@ -72,6 +90,7 @@ export function updateSession(
 
   db.update(sessions)
     .set({
+      ownerUserId: next.ownerUserId,
       providerSessionId: next.providerSessionId,
       name: next.name,
       repoUrl: next.repoUrl,
@@ -81,13 +100,20 @@ export function updateSession(
       lastError: next.lastError ?? null,
       updatedAt: next.updatedAt,
     })
-    .where(eq(sessions.id, id))
+    .where(and(eq(sessions.id, id), eq(sessions.ownerUserId, ownerUserId)))
     .run();
 
   return next;
 }
 
-export function deleteSession(db: AppDb, id: string): boolean {
-  const result = db.delete(sessions).where(eq(sessions.id, id)).run();
+export function deleteSession(
+  db: AppDb,
+  ownerUserId: string,
+  id: string,
+): boolean {
+  const result = db
+    .delete(sessions)
+    .where(and(eq(sessions.id, id), eq(sessions.ownerUserId, ownerUserId)))
+    .run();
   return result.changes > 0;
 }

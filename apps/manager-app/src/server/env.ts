@@ -8,6 +8,40 @@ const envSchema = z.object({
   SESSION_USER_AUTH_TOKEN: z.string().min(1).optional(),
   ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1).optional(),
+  AUTH_JWT_SECRET: z
+    .string()
+    .min(32, "AUTH_JWT_SECRET must be at least 32 chars"),
+  AUTH_JWT_MAX_AGE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(300)
+    .max(60 * 60 * 24 * 30)
+    .default(60 * 60 * 12),
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .min(1, "TOKEN_ENCRYPTION_KEY is required")
+    .refine((value) => {
+      const decoded = Buffer.from(value, "base64");
+      return decoded.length === 32;
+    }, "TOKEN_ENCRYPTION_KEY must be base64 encoded 32-byte key"),
+  GITHUB_CLIENT_ID: z.string().min(1, "GITHUB_CLIENT_ID is required"),
+  GITHUB_CLIENT_SECRET: z.string().min(1, "GITHUB_CLIENT_SECRET is required"),
+  GITHUB_OAUTH_CALLBACK_URL: z
+    .string()
+    .url("GITHUB_OAUTH_CALLBACK_URL must be a valid URL"),
+  GITHUB_OAUTH_AUTHORIZE_URL: z
+    .string()
+    .url()
+    .default("https://github.com/login/oauth/authorize"),
+  GITHUB_OAUTH_TOKEN_URL: z
+    .string()
+    .url()
+    .default("https://github.com/login/oauth/access_token"),
+  GITHUB_API_USER_URL: z.string().url().default("https://api.github.com/user"),
+  GITHUB_API_EMAILS_URL: z
+    .string()
+    .url()
+    .default("https://api.github.com/user/emails"),
   MODAL_ENVIRONMENT: z.string().min(1).optional(),
   MODAL_APP_NAME: z.string().default("coding-on-modal-session-manager"),
   DEFAULT_REPO_URL: z

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { AuthUser, MeResponse } from "@/lib/auth-types";
 import type { SessionExecResult, SessionRecord } from "@/lib/session-types";
 
 type ApiError = {
@@ -32,6 +33,10 @@ function formatTime(iso: string): string {
 }
 
 export default function Home() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -58,40 +63,91 @@ export default function Home() {
     [sessions, selectedId],
   );
 
-  const loadSessions = useCallback(async (preferredId?: string) => {
-    setLoading(true);
-    setError(null);
+  const onUnauthorized = useCallback(() => {
+    setUser(null);
+    setSessions([]);
+    setSelectedId(null);
+    setExecResult(null);
+    setMessage(null);
+    setError("Authentication required. Please sign in with GitHub.");
+  }, []);
+
+  const ensureResponseOk = useCallback(
+    async (response: Response) => {
+      if (response.status === 401) {
+        onUnauthorized();
+        throw new Error("Authentication required");
+      }
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+    },
+    [onUnauthorized],
+  );
+
+  const loadMe = useCallback(async () => {
+    setAuthLoading(true);
     try {
-      const response = await fetch("/api/sessions", { cache: "no-store" });
+      const response = await fetch("/api/me", { cache: "no-store" });
+      if (response.status === 401) {
+        setUser(null);
+        return;
+      }
       if (!response.ok) {
         throw new Error(await parseError(response));
       }
 
-      const body = (await response.json()) as SessionListResponse;
-      setSessions(body.sessions);
-
-      setSelectedId((currentSelectedId) => {
-        if (preferredId) {
-          return preferredId;
-        }
-
-        if (
-          currentSelectedId &&
-          body.sessions.some((session) => session.id === currentSelectedId)
-        ) {
-          return currentSelectedId;
-        }
-
-        return body.sessions[0]?.id ?? null;
-      });
+      const body = (await response.json()) as MeResponse;
+      setUser(body.user);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : String(loadError),
       );
+      setUser(null);
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
     }
   }, []);
+
+  const loadSessions = useCallback(
+    async (preferredId?: string) => {
+      if (!user) {
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/sessions", { cache: "no-store" });
+        await ensureResponseOk(response);
+
+        const body = (await response.json()) as SessionListResponse;
+        setSessions(body.sessions);
+
+        setSelectedId((currentSelectedId) => {
+          if (preferredId) {
+            return preferredId;
+          }
+
+          if (
+            currentSelectedId &&
+            body.sessions.some((session) => session.id === currentSelectedId)
+          ) {
+            return currentSelectedId;
+          }
+
+          return body.sessions[0]?.id ?? null;
+        });
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error ? loadError.message : String(loadError),
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ensureResponseOk, user],
+  );
 
   async function refreshSelected() {
     if (!selectedId) {
@@ -105,9 +161,7 @@ export default function Home() {
       const response = await fetch(`/api/sessions/${selectedId}`, {
         cache: "no-store",
       });
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       const body = (await response.json()) as SessionResponse;
       setSessions((current) =>
@@ -144,10 +198,7 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       const body = (await response.json()) as SessionResponse;
       setCreateForm({ name: "", repoUrl: "", repoRef: "" });
@@ -177,10 +228,7 @@ export default function Home() {
       const response = await fetch(`/api/sessions/${selectedId}/terminate`, {
         method: "POST",
       });
-
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       const body = (await response.json()) as SessionResponse;
       setSessions((current) =>
@@ -213,10 +261,7 @@ export default function Home() {
       const response = await fetch(`/api/sessions/${idToDelete}`, {
         method: "DELETE",
       });
-
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       setExecResult(null);
       setMessage(`Session metadata deleted: ${idToDelete}`);
@@ -255,10 +300,7 @@ export default function Home() {
             : undefined,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       const body = (await response.json()) as ExecResponse;
       setExecResult(body.result);
@@ -293,10 +335,7 @@ export default function Home() {
           pty: true,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      await ensureResponseOk(response);
 
       const body = (await response.json()) as ExecResponse;
       setExecResult(body.result);
@@ -311,26 +350,146 @@ export default function Home() {
     }
   }
 
+  async function signOut() {
+    setBusy("logout");
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(await parseError(response));
+      }
+      setUser(null);
+      setSessions([]);
+      setSelectedId(null);
+      setExecResult(null);
+      setMessage("Signed out.");
+    } catch (logoutError) {
+      setError(
+        logoutError instanceof Error
+          ? logoutError.message
+          : String(logoutError),
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("authError");
+    if (!authError) {
+      return;
+    }
+
+    setAuthNotice(`GitHub login failed (${authError}).`);
+    params.delete("authError");
+    const search = params.toString();
+    const nextPath = `${window.location.pathname}${search ? `?${search}` : ""}`;
+    window.history.replaceState({}, "", nextPath);
+  }, []);
+
+  useEffect(() => {
+    void loadMe();
+  }, [loadMe]);
+
+  useEffect(() => {
+    if (!user) {
+      setSessions([]);
+      setSelectedId(null);
+      return;
+    }
     void loadSessions();
-  }, [loadSessions]);
+  }, [loadSessions, user]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#f5f3e7_0%,_#e0efe9_45%,_#dce8f9_100%)] px-6 py-8 text-slate-900">
+        <main className="mx-auto w-full max-w-3xl rounded-3xl border border-slate-900/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+          <p className="text-sm text-slate-600">
+            Loading authentication state...
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#f5f3e7_0%,_#e0efe9_45%,_#dce8f9_100%)] px-6 py-8 text-slate-900">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <header className="rounded-3xl border border-slate-900/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-600">
+              Session Manager
+            </p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              Cloud Development Sessions
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Sign in with GitHub to create and manage your Sessions.
+            </p>
+          </header>
+
+          {(authNotice || error) && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {authNotice ?? error}
+            </div>
+          )}
+
+          <section className="rounded-3xl border border-slate-900/10 bg-white/80 p-6 shadow-sm backdrop-blur">
+            <a
+              href="/api/auth/github/login"
+              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+            >
+              Sign in with GitHub
+            </a>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#f5f3e7_0%,_#e0efe9_45%,_#dce8f9_100%)] px-6 py-8 text-slate-900">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="rounded-3xl border border-slate-900/10 bg-white/80 p-6 shadow-sm backdrop-blur">
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-600">
-            Session Manager
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            Cloud Development Sessions
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Create sessions, run Claude Agent SDK prompts, and execute commands
-            in
-            <code> /workspace/repo</code>.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-600">
+                Session Manager
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+                Cloud Development Sessions
+              </h1>
+              <p className="mt-2 text-sm text-slate-600">
+                Signed in as{" "}
+                <span className="font-medium">{user.github.login}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              disabled={busy !== null}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy === "logout" ? "Signing out..." : "Sign out"}
+            </button>
+          </div>
         </header>
+
+        {message ? (
+          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {message}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </p>
+        ) : null}
 
         <section className="rounded-3xl border border-slate-900/10 bg-white/80 p-6 shadow-sm backdrop-blur">
           <h2 className="text-lg font-semibold">Create Session</h2>
@@ -558,7 +717,7 @@ export default function Home() {
 
                 <form onSubmit={runCommand} className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">
-                    Run command
+                    Execute Command
                   </h3>
                   <textarea
                     value={command}
@@ -566,11 +725,12 @@ export default function Home() {
                     rows={3}
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none transition focus:border-slate-500"
                   />
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input
                       value={cwd}
                       onChange={(event) => setCwd(event.target.value)}
-                      className="min-w-[220px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none transition focus:border-slate-500"
+                      className="min-w-[220px] flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500"
+                      placeholder="working directory"
                     />
                     <button
                       type="submit"
@@ -579,26 +739,25 @@ export default function Home() {
                       }
                       className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {busy === "exec" ? "Running..." : "Run"}
+                      {busy === "exec" ? "Running..." : "Run Command"}
                     </button>
                   </div>
                 </form>
 
                 {execResult ? (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">
+                    <p className="font-semibold text-slate-300">
+                      Exit code: {execResult.exitCode}
+                    </p>
                     <div>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                        stdout
-                      </p>
-                      <pre className="max-h-80 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs text-slate-100">
+                      <p className="mb-1 text-slate-400">stdout</p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-slate-100">
                         {execResult.stdout || "(empty)"}
                       </pre>
                     </div>
                     <div>
-                      <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                        stderr
-                      </p>
-                      <pre className="max-h-80 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs text-rose-200">
+                      <p className="mb-1 text-slate-400">stderr</p>
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-rose-200">
                         {execResult.stderr || "(empty)"}
                       </pre>
                     </div>
@@ -608,17 +767,6 @@ export default function Home() {
             )}
           </div>
         </section>
-
-        {message ? (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">
-            {message}
-          </p>
-        ) : null}
-        {error ? (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
-            {error}
-          </p>
-        ) : null}
       </main>
     </div>
   );

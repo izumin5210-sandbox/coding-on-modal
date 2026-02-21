@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { AuthError, requireAuthenticatedUser } from "@/server/auth/session";
 import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
@@ -17,12 +18,16 @@ const createSchema = z.object({
   repoRef: z.string().trim().min(1).max(120).optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const db = getDb();
   try {
-    const sessions = await listSessionRecords(db);
+    const user = requireAuthenticatedUser(db, request);
+    const sessions = await listSessionRecords(db, user.id);
     return NextResponse.json({ sessions });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return jsonError(error.statusCode, error.message);
+    }
     return jsonError(
       500,
       error instanceof Error ? error.message : "Internal error",
@@ -33,8 +38,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const db = getDb();
   try {
+    const user = requireAuthenticatedUser(db, request);
     const input = createSchema.parse(await request.json());
-    const session = await createSession(db, input);
+    const session = await createSession(db, user.id, input);
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -44,6 +50,9 @@ export async function POST(request: Request) {
       );
     }
     if (error instanceof SessionError) {
+      return jsonError(error.statusCode, error.message);
+    }
+    if (error instanceof AuthError) {
       return jsonError(error.statusCode, error.message);
     }
 

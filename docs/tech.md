@@ -15,9 +15,11 @@
 - In the future, provide SSH access to sessions to allow direct CLI-based execution.
 
 ## Authentication Strategy (Current Phase)
-- The initial phase assumes a single fixed user.
-- Inject Claude credentials through environment variables using a token obtained by `claude setup-token`.
-- Resolution priority: `SESSION_USER_AUTH_TOKEN`, then compatibility fallbacks `ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`.
+- Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
+- Persist app users in `users`; persist GitHub profile in `github_accounts`; persist encrypted OAuth tokens in `github_credentials`.
+- Protect all `/api/sessions/*` endpoints with authentication and enforce owner-only access by `sessions.owner_user_id`.
+- Use authenticated user's GitHub OAuth token when cloning repositories (public/private), injected via `GIT_ASKPASS` to avoid token leakage in command arguments.
+- Continue using `SESSION_USER_AUTH_TOKEN` (or compatibility fallbacks) for Claude Agent SDK execution until per-user Claude credentials are introduced.
 
 ## API & Naming Rules
 - Standardize public naming on `Session` and use `/sessions` route semantics.
@@ -30,7 +32,8 @@
 - Control global/idle timeout values through environment variables.
 
 ## Near-Term Technical Priorities
-- When user authentication is introduced, separate token handling per user.
+- Add explicit JWT revoke/session invalidation mechanism when immediate logout invalidation is required.
+- Add GitHub OAuth token refresh flow and recovery handling for expired credentials.
 - Add retention policy for audit logs and execution history.
 - Decouple agent execution APIs from chat input channels to support channel expansion.
 - Define authorization and audit-log design for SSH-based operations.
