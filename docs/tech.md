@@ -16,10 +16,10 @@
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
-- Persist app users in `users`; persist GitHub profile in `github_accounts`; persist encrypted OAuth tokens in `github_credentials`.
+- Persist app users in `users`; persist GitHub profile in `github_accounts`; persist encrypted OAuth tokens in `github_credentials`; persist encrypted Claude token in `claude_credentials`.
 - Protect all `/api/sessions/*` endpoints with authentication and enforce owner-only access by `sessions.owner_user_id`.
 - Use authenticated user's GitHub OAuth token when cloning repositories (public/private), injected via `GIT_ASKPASS` to avoid token leakage in command arguments.
-- Continue using `SESSION_USER_AUTH_TOKEN` (or compatibility fallbacks) for Claude Agent SDK execution until per-user Claude credentials are introduced.
+- Require per-user Claude token for Claude Agent SDK execution; do not use environment-variable fallback tokens.
 
 ## API & Naming Rules
 - Standardize public naming on `Session` and use `/sessions` route semantics.

@@ -11,11 +11,12 @@
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
 - `apps/manager-app/src/app/api/me/route.ts`: Authenticated user profile endpoint.
+- `apps/manager-app/src/app/api/claude-token/route.ts`: Claude token save endpoint for authenticated users.
 - `apps/manager-app/src/app/api/sessions/*`: Session CRUD / execute / agent execution APIs.
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
-- `apps/manager-app/src/server/users/store.ts`: User/GitHub account/credential persistence.
+- `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
 - `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle and execution logic.
 - `apps/manager-app/src/server/sessions/store.ts`: Drizzle-based persistence access with injected `db`.
@@ -29,6 +30,7 @@
 - Auth layer: OAuth callback handling, JWT issuance/verification, and user identity resolution.
 - Service layer: Session state transitions and orchestration of Modal/agent operations.
 - Store layer: DB reads/writes via Drizzle with explicit `db` injection and owner-scoped access patterns.
+- Credential storage: store GitHub OAuth and Claude tokens encrypted at rest via `server/crypto/token.ts`.
 - Infra layer: Modal image construction and external service integration.
 
 ## Naming & Evolution Rules

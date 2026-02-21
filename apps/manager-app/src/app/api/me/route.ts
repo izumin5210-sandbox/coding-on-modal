@@ -3,6 +3,7 @@ import type { MeResponse } from "@/lib/auth-types";
 import { AuthError, requireAuthenticatedUser } from "@/server/auth/session";
 import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
+import { hasClaudeCredentialByUserId } from "@/server/users/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ export async function GET(request: Request) {
 
   try {
     const user = requireAuthenticatedUser(db, request);
-    const body: MeResponse = { user };
+    const body: MeResponse = {
+      user,
+      claudeTokenConfigured: hasClaudeCredentialByUserId(db, user.id),
+    };
     return NextResponse.json(body);
   } catch (error) {
     if (error instanceof AuthError) {

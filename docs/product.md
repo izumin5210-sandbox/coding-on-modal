@@ -11,6 +11,7 @@
 - GitHub login is required, and each user can view/manage only their own Sessions.
 - Repository bootstrap supports both public and private GitHub repositories.
 - Agent execution is based on Claude Code SDK, concentrating development work into remote execution.
+- Before the first Session launch, users must configure their own Claude token in a modal and save it for subsequent agent runs.
 
 ## Terminology
 - `Session`: The public term for one runnable development environment.
@@ -20,6 +21,7 @@
 - Developers can launch a remote development environment from the Web UI and perform implementation/debugging work with coding agents.
 - A reproducible environment can be created quickly by specifying repository URL and ref.
 - Users should focus on `Session` management without requiring prior knowledge of the underlying infrastructure (Modal).
+- Claude token setup should happen in-product with minimal friction, and Session creation should resume immediately after saving.
 - Failures should be diagnosable from both API and UI.
 
 ## Explicit Non-Goals (Current Phase)

@@ -18,6 +18,12 @@ type SessionResponse = {
   session: SessionRecord;
 };
 
+type CreateSessionPayload = {
+  name?: string;
+  repoUrl?: string;
+  repoRef?: string;
+};
+
 type ExecResponse = {
   result: SessionExecResult;
 };
@@ -34,6 +40,7 @@ function formatTime(iso: string): string {
 
 export default function Home() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [claudeTokenConfigured, setClaudeTokenConfigured] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
@@ -58,6 +65,13 @@ export default function Home() {
   const [cwd, setCwd] = useState("/workspace/repo");
   const [execResult, setExecResult] = useState<SessionExecResult | null>(null);
 
+  const [isClaudeTokenModalOpen, setIsClaudeTokenModalOpen] = useState(false);
+  const [claudeTokenInput, setClaudeTokenInput] = useState("");
+  const [claudeTokenSaving, setClaudeTokenSaving] = useState(false);
+  const [claudeTokenError, setClaudeTokenError] = useState<string | null>(null);
+  const [pendingCreatePayload, setPendingCreatePayload] =
+    useState<CreateSessionPayload | null>(null);
+
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [sessions, selectedId],
@@ -65,9 +79,14 @@ export default function Home() {
 
   const onUnauthorized = useCallback(() => {
     setUser(null);
+    setClaudeTokenConfigured(false);
     setSessions([]);
     setSelectedId(null);
     setExecResult(null);
+    setPendingCreatePayload(null);
+    setIsClaudeTokenModalOpen(false);
+    setClaudeTokenInput("");
+    setClaudeTokenError(null);
     setMessage(null);
     setError("Authentication required. Please sign in with GitHub.");
   }, []);
@@ -91,6 +110,7 @@ export default function Home() {
       const response = await fetch("/api/me", { cache: "no-store" });
       if (response.status === 401) {
         setUser(null);
+        setClaudeTokenConfigured(false);
         return;
       }
       if (!response.ok) {
@@ -99,11 +119,13 @@ export default function Home() {
 
       const body = (await response.json()) as MeResponse;
       setUser(body.user);
+      setClaudeTokenConfigured(body.claudeTokenConfigured);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : String(loadError),
       );
       setUser(null);
+      setClaudeTokenConfigured(false);
     } finally {
       setAuthLoading(false);
     }
@@ -180,19 +202,12 @@ export default function Home() {
     }
   }
 
-  async function createSession(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitCreateSession(payload: CreateSessionPayload) {
     setBusy("create");
     setMessage(null);
     setError(null);
 
     try {
-      const payload = {
-        name: createForm.name.trim() || undefined,
-        repoUrl: createForm.repoUrl.trim() || undefined,
-        repoRef: createForm.repoRef.trim() || undefined,
-      };
-
       const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -213,6 +228,64 @@ export default function Home() {
       );
     } finally {
       setBusy(null);
+    }
+  }
+
+  async function createSession(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload: CreateSessionPayload = {
+      name: createForm.name.trim() || undefined,
+      repoUrl: createForm.repoUrl.trim() || undefined,
+      repoRef: createForm.repoRef.trim() || undefined,
+    };
+
+    if (!claudeTokenConfigured) {
+      setPendingCreatePayload(payload);
+      setClaudeTokenError(null);
+      setIsClaudeTokenModalOpen(true);
+      return;
+    }
+
+    await submitCreateSession(payload);
+  }
+
+  async function saveClaudeToken() {
+    const token = claudeTokenInput.trim();
+    if (!token) {
+      setClaudeTokenError("Claude token is required.");
+      return;
+    }
+
+    setClaudeTokenSaving(true);
+    setClaudeTokenError(null);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/claude-token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      await ensureResponseOk(response);
+
+      setClaudeTokenConfigured(true);
+      setClaudeTokenInput("");
+      setIsClaudeTokenModalOpen(false);
+      setMessage("Claude token saved.");
+
+      if (pendingCreatePayload) {
+        const payload = pendingCreatePayload;
+        setPendingCreatePayload(null);
+        await submitCreateSession(payload);
+      }
+    } catch (saveError) {
+      setClaudeTokenError(
+        saveError instanceof Error ? saveError.message : String(saveError),
+      );
+    } finally {
+      setClaudeTokenSaving(false);
     }
   }
 
@@ -363,9 +436,14 @@ export default function Home() {
         throw new Error(await parseError(response));
       }
       setUser(null);
+      setClaudeTokenConfigured(false);
       setSessions([]);
       setSelectedId(null);
       setExecResult(null);
+      setPendingCreatePayload(null);
+      setIsClaudeTokenModalOpen(false);
+      setClaudeTokenInput("");
+      setClaudeTokenError(null);
       setMessage("Signed out.");
     } catch (logoutError) {
       setError(
@@ -398,6 +476,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) {
+      setClaudeTokenConfigured(false);
       setSessions([]);
       setSelectedId(null);
       return;
@@ -468,15 +547,32 @@ export default function Home() {
                 Signed in as{" "}
                 <span className="font-medium">{user.github.login}</span>
               </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Claude token: {claudeTokenConfigured ? "configured" : "not set"}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={signOut}
-              disabled={busy !== null}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy === "logout" ? "Signing out..." : "Sign out"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingCreatePayload(null);
+                  setClaudeTokenError(null);
+                  setIsClaudeTokenModalOpen(true);
+                }}
+                disabled={busy !== null || claudeTokenSaving}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Claude token settings
+              </button>
+              <button
+                type="button"
+                onClick={signOut}
+                disabled={busy !== null}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busy === "logout" ? "Signing out..." : "Sign out"}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -768,6 +864,64 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      {isClaudeTokenModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-semibold">Configure Claude token</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Save your Claude token to run agent tasks in your Sessions.
+            </p>
+            {pendingCreatePayload ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Session creation will resume after saving this token.
+              </p>
+            ) : null}
+
+            <form
+              className="mt-4 space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveClaudeToken();
+              }}
+            >
+              <input
+                type="password"
+                value={claudeTokenInput}
+                onChange={(event) => setClaudeTokenInput(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500"
+                placeholder="Claude token"
+              />
+              {claudeTokenError ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {claudeTokenError}
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsClaudeTokenModalOpen(false);
+                    setPendingCreatePayload(null);
+                    setClaudeTokenError(null);
+                  }}
+                  disabled={claudeTokenSaving}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={claudeTokenSaving}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {claudeTokenSaving ? "Saving..." : "Save token"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import type { AuthUser } from "@/lib/auth-types";
 import type { AppDb } from "@/server/db";
 import {
+  claudeCredentials,
   type GithubAccountRow,
   githubAccounts,
   githubCredentials,
@@ -192,4 +193,70 @@ export function getEncryptedGithubAccessTokenByUserId(
     .get();
 
   return row?.accessTokenEncrypted ?? null;
+}
+
+export function upsertClaudeCredentialByUserId(
+  db: AppDb,
+  userId: string,
+  tokenEncrypted: string,
+): void {
+  db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const existing = tx
+      .select()
+      .from(claudeCredentials)
+      .where(eq(claudeCredentials.userId, userId))
+      .get();
+
+    if (existing) {
+      tx.update(claudeCredentials)
+        .set({
+          tokenEncrypted,
+          updatedAt: now,
+        })
+        .where(eq(claudeCredentials.id, existing.id))
+        .run();
+      return;
+    }
+
+    tx.insert(claudeCredentials)
+      .values({
+        id: `clc_${randomUUID().replaceAll("-", "")}`,
+        userId,
+        tokenEncrypted,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+  });
+}
+
+export function getEncryptedClaudeTokenByUserId(
+  db: AppDb,
+  userId: string,
+): string | null {
+  const row = db
+    .select({
+      tokenEncrypted: claudeCredentials.tokenEncrypted,
+    })
+    .from(claudeCredentials)
+    .where(eq(claudeCredentials.userId, userId))
+    .get();
+
+  return row?.tokenEncrypted ?? null;
+}
+
+export function hasClaudeCredentialByUserId(
+  db: AppDb,
+  userId: string,
+): boolean {
+  const row = db
+    .select({
+      id: claudeCredentials.id,
+    })
+    .from(claudeCredentials)
+    .where(eq(claudeCredentials.userId, userId))
+    .get();
+
+  return row !== undefined;
 }

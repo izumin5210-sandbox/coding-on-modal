@@ -5,9 +5,6 @@ import { z } from "zod";
 const envSchema = z.object({
   MODAL_TOKEN_ID: z.string().min(1, "MODAL_TOKEN_ID is required"),
   MODAL_TOKEN_SECRET: z.string().min(1, "MODAL_TOKEN_SECRET is required"),
-  SESSION_USER_AUTH_TOKEN: z.string().min(1).optional(),
-  ANTHROPIC_AUTH_TOKEN: z.string().min(1).optional(),
-  CLAUDE_CODE_OAUTH_TOKEN: z.string().min(1).optional(),
   AUTH_JWT_SECRET: z
     .string()
     .min(32, "AUTH_JWT_SECRET must be at least 32 chars"),

@@ -21,7 +21,10 @@ import {
   type SessionStoreRecord,
   updateSession,
 } from "@/server/sessions/store";
-import { getEncryptedGithubAccessTokenByUserId } from "@/server/users/store";
+import {
+  getEncryptedClaudeTokenByUserId,
+  getEncryptedGithubAccessTokenByUserId,
+} from "@/server/users/store";
 
 const WORKSPACE_PATH = "/workspace/repo";
 const AGENT_SDK_WORKDIR = "/opt/agent-sdk";
@@ -48,17 +51,6 @@ for await (const message of query({ prompt, options })) {
   process.stdout.write(JSON.stringify(message) + "\\n");
 }
 `;
-
-function resolveSingleUserAuthToken(
-  env: ReturnType<typeof getEnv>,
-): string | null {
-  return (
-    env.SESSION_USER_AUTH_TOKEN ??
-    env.ANTHROPIC_AUTH_TOKEN ??
-    env.CLAUDE_CODE_OAUTH_TOKEN ??
-    null
-  );
-}
 
 export class SessionError extends Error {
   constructor(
@@ -370,13 +362,14 @@ export async function runAgentInSession(
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
   const env = getEnv();
-  const authToken = resolveSingleUserAuthToken(env);
-  if (!authToken) {
+  const encryptedClaudeToken = getEncryptedClaudeTokenByUserId(db, ownerUserId);
+  if (!encryptedClaudeToken) {
     throw new SessionError(
-      "SESSION_USER_AUTH_TOKEN (or ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_OAUTH_TOKEN) is required",
+      "Claude token is not configured. Please save it before running the agent.",
       400,
     );
   }
+  const authToken = decryptToken(encryptedClaudeToken);
 
   const record = await mustGetSession(db, ownerUserId, id);
   if (record.status === "terminated") {
