@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Manager App
 
-## Getting Started
+Session manager UI for cloud-backed development environments.
 
-First, run the development server:
+## Required environment variables
+
+Create `apps/manager-app/.env.local`:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+MODAL_TOKEN_ID=ak-...
+MODAL_TOKEN_SECRET=as-...
+SESSION_USER_AUTH_TOKEN=your-claude-setup-token
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`SESSION_USER_AUTH_TOKEN` is the single-user token for now.  
+Generate it with `claude setup-token` on the user account that owns the Claude subscription.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Optional:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+MODAL_ENVIRONMENT=main
+MODAL_APP_NAME=coding-on-modal-session-manager
+DEFAULT_REPO_URL=https://github.com/izumin5210-sandbox/coding-on-modal
+DEFAULT_REPO_REF=main
+SANDBOX_TIMEOUT_MINUTES=60
+SANDBOX_IDLE_TIMEOUT_MINUTES=30
+AGENT_MAX_TURNS=8
+SESSION_DB_PATH=apps/manager-app/data/manager.db
+```
 
-## Learn More
+## Run
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm --filter manager-app db:migrate
+pnpm --filter manager-app dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open `http://localhost:3000`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Database workflow
 
-## Deploy on Vercel
+- ORM: Drizzle ORM v1 beta (`drizzle-orm` + `drizzle-kit`).
+- Runtime: API handlers acquire DB and inject it into service/store layers.
+- Schema change flow:
+  1. Update `src/server/db/schema.ts`.
+  2. Run `pnpm --filter manager-app db:generate`.
+  3. Run `pnpm --filter manager-app db:migrate`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Session flow
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Create a Session from UI.
+2. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
+3. Run shell commands from the manager UI.
