@@ -67,7 +67,9 @@ export function getGithubAuthorizeUrl(input: {
   const url = new URL(env.GITHUB_OAUTH_AUTHORIZE_URL);
   url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
   url.searchParams.set("redirect_uri", env.GITHUB_OAUTH_CALLBACK_URL);
-  url.searchParams.set("scope", "read:user user:email repo");
+  // `gist` is included because `gh auth login --with-token` validates for
+  // `repo`, `read:org`, and `gist` scopes before it stores credentials.
+  url.searchParams.set("scope", "read:user user:email repo read:org gist");
   url.searchParams.set("state", input.state);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("code_challenge", input.codeChallenge);

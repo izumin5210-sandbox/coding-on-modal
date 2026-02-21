@@ -217,6 +217,9 @@ export async function createSession(
   let lastError: string | undefined;
 
   try {
+    const githubAuthSecret = await modal.secrets.fromObject({
+      SESSION_GITHUB_TOKEN: githubToken,
+    });
     const cloneResult = await runCommand(
       providerSession.sandboxId,
       [
@@ -224,30 +227,18 @@ export async function createSession(
         "-lc",
         `
 set -eu
-ASKPASS="$(mktemp)"
-cleanup() {
-  rm -f "$ASKPASS"
-}
-trap cleanup EXIT
-cat <<'EOF' > "$ASKPASS"
-#!/bin/sh
-case "$1" in
-  *Username*) echo "x-access-token" ;;
-  *Password*) echo "$GITHUB_TOKEN" ;;
-  *) echo "" ;;
-esac
-EOF
-chmod 700 "$ASKPASS"
-GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
+printf '%s\n' "$SESSION_GITHUB_TOKEN" | env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token
+env -u GH_TOKEN -u GITHUB_TOKEN gh auth setup-git --hostname github.com
+GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
         `,
       ],
       {
         env: {
-          GITHUB_TOKEN: githubToken,
           REPO_URL: repoUrl,
           REPO_REF: repoRef,
           WORKSPACE_PATH,
         },
+        secrets: [githubAuthSecret],
       },
     );
 
