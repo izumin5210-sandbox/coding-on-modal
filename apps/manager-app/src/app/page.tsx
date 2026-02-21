@@ -149,16 +149,9 @@ export default function Home() {
     [ensureResponseOk, user],
   );
 
-  async function refreshSelected() {
-    if (!selectedId) {
-      return;
-    }
-
-    setBusy("refresh");
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/sessions/${selectedId}`, {
+  const loadSessionDetail = useCallback(
+    async (id: string) => {
+      const response = await fetch(`/api/sessions/${id}`, {
         cache: "no-store",
       });
       await ensureResponseOk(response);
@@ -169,6 +162,20 @@ export default function Home() {
           session.id === body.session.id ? body.session : session,
         ),
       );
+    },
+    [ensureResponseOk],
+  );
+
+  const refreshSelected = useCallback(async () => {
+    if (!selectedId) {
+      return;
+    }
+
+    setBusy("refresh");
+    setError(null);
+
+    try {
+      await loadSessionDetail(selectedId);
     } catch (refreshError) {
       setError(
         refreshError instanceof Error
@@ -178,7 +185,7 @@ export default function Home() {
     } finally {
       setBusy(null);
     }
-  }
+  }, [loadSessionDetail, selectedId]);
 
   async function createSession(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -404,6 +411,18 @@ export default function Home() {
     }
     void loadSessions();
   }, [loadSessions, user]);
+
+  useEffect(() => {
+    if (!user || !selectedId) {
+      return;
+    }
+
+    void loadSessionDetail(selectedId).catch((loadError) => {
+      setError(
+        loadError instanceof Error ? loadError.message : String(loadError),
+      );
+    });
+  }, [loadSessionDetail, selectedId, user]);
 
   if (authLoading) {
     return (
@@ -684,6 +703,49 @@ export default function Home() {
                     {selectedSession.lastError}
                   </p>
                 ) : null}
+
+                <div className="mt-4 space-y-2">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">
+                    SSH Access
+                  </h3>
+                  {selectedSession.ssh ? (
+                    <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                      <p>
+                        <span className="font-semibold text-slate-900">
+                          Command:
+                        </span>{" "}
+                        <code className="break-all">
+                          {selectedSession.ssh.command}
+                        </code>
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-900">
+                          Host key fingerprint:
+                        </span>{" "}
+                        <code className="break-all">
+                          {selectedSession.ssh.hostKeyFingerprint}
+                        </code>
+                      </p>
+                      <p>
+                        <span className="font-semibold text-slate-900">
+                          known_hosts entry:
+                        </span>{" "}
+                        <code className="break-all">
+                          {selectedSession.ssh.knownHostsEntry}
+                        </code>
+                      </p>
+                    </div>
+                  ) : selectedSession.status !== "running" ? (
+                    <p className="text-xs text-slate-600">
+                      SSH access is available only while the Session is running.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600">
+                      SSH connection details are not ready yet. Click Refresh
+                      Status and retry.
+                    </p>
+                  )}
+                </div>
 
                 <form onSubmit={runAgent} className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">

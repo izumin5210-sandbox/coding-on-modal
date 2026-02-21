@@ -64,8 +64,9 @@ Open `http://localhost:3000`.
 
 1. Sign in with GitHub from UI.
 2. Create a Session from UI (public/private GitHub repositories supported with your OAuth token).
-3. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
-4. Run shell commands from the manager UI.
+3. Session bootstrap enables SSH login with your GitHub-registered public keys.
+4. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
+5. Run shell commands from the manager UI.
 
 ## Auth flow
 

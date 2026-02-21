@@ -6,6 +6,7 @@ import type {
   ExecSessionInput,
   SessionExecResult,
   SessionRecord,
+  SessionSshInfo,
   SessionStatus,
 } from "@/lib/session-types";
 import { decryptToken } from "@/server/crypto/token";
@@ -21,10 +22,16 @@ import {
   type SessionStoreRecord,
   updateSession,
 } from "@/server/sessions/store";
-import { getEncryptedGithubAccessTokenByUserId } from "@/server/users/store";
+import {
+  getAuthUserById,
+  getEncryptedGithubAccessTokenByUserId,
+} from "@/server/users/store";
 
 const WORKSPACE_PATH = "/workspace/repo";
 const AGENT_SDK_WORKDIR = "/opt/agent-sdk";
+const SESSION_SSH_PORT = 22;
+const SESSION_SSH_TUNNELS_TIMEOUT_MS = 10_000;
+const LINUX_USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
 const AGENT_RUNNER_SOURCE = `
 import { query } from "@anthropic-ai/claude-agent-sdk";
 
@@ -73,8 +80,27 @@ function createSessionId(): string {
   return `sess_${randomUUID().replaceAll("-", "")}`;
 }
 
-function toPublic(record: SessionStoreRecord): SessionRecord {
-  return {
+function isValidLinuxUsername(value: string): boolean {
+  return LINUX_USERNAME_PATTERN.test(value);
+}
+
+function resolveSessionSshUser(githubLogin: string): string {
+  const normalized = githubLogin.trim();
+  if (!isValidLinuxUsername(normalized)) {
+    throw new SessionError(
+      `GitHub login "${githubLogin}" cannot be used as Session SSH user. Login must match ${LINUX_USERNAME_PATTERN.source}.`,
+      400,
+    );
+  }
+
+  return normalized;
+}
+
+function toPublic(
+  record: SessionStoreRecord,
+  options?: { ssh?: SessionSshInfo | null },
+): SessionRecord {
+  const base: SessionRecord = {
     id: record.id,
     name: record.name,
     repoUrl: record.repoUrl,
@@ -85,6 +111,12 @@ function toPublic(record: SessionStoreRecord): SessionRecord {
     updatedAt: record.updatedAt,
     lastError: record.lastError,
   };
+
+  if (options && "ssh" in options) {
+    base.ssh = options.ssh ?? null;
+  }
+
+  return base;
 }
 
 function notFound(id: string): SessionError {
@@ -169,6 +201,96 @@ async function runCommand(
   };
 }
 
+async function resolveHostKeyMetadata(providerSessionId: string): Promise<{
+  fingerprint: string;
+  keyType: string;
+  key: string;
+} | null> {
+  const result = await runCommand(
+    providerSessionId,
+    [
+      "sh",
+      "-lc",
+      `
+set -eu
+for key_path in /etc/ssh/ssh_host_ed25519_key.pub /etc/ssh/ssh_host_ecdsa_key.pub /etc/ssh/ssh_host_rsa_key.pub; do
+  if [ -f "$key_path" ]; then
+    fingerprint="$(ssh-keygen -lf "$key_path" | awk '{print $2}')"
+    key_line="$(cat "$key_path")"
+    printf '%s\n' "$fingerprint"
+    printf '%s\n' "$key_line"
+    exit 0
+  fi
+done
+echo "SSH host public key is missing." >&2
+exit 1
+      `,
+    ],
+    {
+      pty: false,
+    },
+  );
+
+  if (result.exitCode !== 0) {
+    return null;
+  }
+
+  const [fingerprintLine = "", keyLine = ""] = result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const [keyType = "", key = ""] = keyLine.split(/\s+/);
+
+  if (!fingerprintLine || !keyType || !key) {
+    return null;
+  }
+
+  return {
+    fingerprint: fingerprintLine,
+    keyType,
+    key,
+  };
+}
+
+async function resolveSessionSshInfo(
+  record: SessionStoreRecord,
+  sshUser: string,
+): Promise<SessionSshInfo | null> {
+  if (record.status !== "running") {
+    return null;
+  }
+
+  try {
+    const providerSession = await getModalClient().sandboxes.fromId(
+      record.providerSessionId,
+    );
+    const tunnels = await providerSession.tunnels(
+      SESSION_SSH_TUNNELS_TIMEOUT_MS,
+    );
+    const sshTunnel = tunnels[SESSION_SSH_PORT];
+    if (!sshTunnel) {
+      return null;
+    }
+
+    const [host, port] = sshTunnel.tcpSocket;
+    const hostKey = await resolveHostKeyMetadata(record.providerSessionId);
+    if (!hostKey) {
+      return null;
+    }
+
+    return {
+      user: sshUser,
+      host,
+      port,
+      hostKeyFingerprint: hostKey.fingerprint,
+      knownHostsEntry: `[${host}]:${port} ${hostKey.keyType} ${hostKey.key}`,
+      command: `ssh -p ${port} ${sshUser}@${host}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function mustGetSession(
   db: AppDb,
   ownerUserId: string,
@@ -193,6 +315,11 @@ export async function createSession(
     `session-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 10_000)}`;
   const repoUrl = input.repoUrl?.trim() || env.DEFAULT_REPO_URL;
   const repoRef = input.repoRef?.trim() || env.DEFAULT_REPO_REF;
+  const authUser = getAuthUserById(db, ownerUserId);
+  if (!authUser) {
+    throw new SessionError("Authentication required", 401);
+  }
+  const sshUser = resolveSessionSshUser(authUser.github.login);
   const encryptedGithubToken = getEncryptedGithubAccessTokenByUserId(
     db,
     ownerUserId,
@@ -211,6 +338,7 @@ export async function createSession(
     name,
     timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
     idleTimeoutMs: env.SANDBOX_IDLE_TIMEOUT_MINUTES * 60_000,
+    unencryptedPorts: [SESSION_SSH_PORT],
   });
 
   let status: SessionStatus = "running";
@@ -229,6 +357,44 @@ export async function createSession(
 set -eu
 printf '%s\n' "$SESSION_GITHUB_TOKEN" | env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token
 env -u GH_TOKEN -u GITHUB_TOKEN gh auth setup-git --hostname github.com
+if ! id -u "$SSH_USER" >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash "$SSH_USER"
+fi
+home_dir="$(getent passwd "$SSH_USER" | cut -d: -f6)"
+if [ -z "$home_dir" ]; then
+  echo "Failed to resolve SSH user home directory: $SSH_USER" >&2
+  exit 1
+fi
+install -d -m 700 -o "$SSH_USER" -g "$SSH_USER" "$home_dir/.ssh"
+gh api --hostname github.com "/users/$GITHUB_LOGIN/keys" --jq '.[].key' > "$home_dir/.ssh/authorized_keys"
+if [ ! -s "$home_dir/.ssh/authorized_keys" ]; then
+  echo "No SSH public keys found for GitHub login: $GITHUB_LOGIN" >&2
+  exit 1
+fi
+chmod 600 "$home_dir/.ssh/authorized_keys"
+chown "$SSH_USER:$SSH_USER" "$home_dir/.ssh/authorized_keys"
+install -d -m 755 /run/sshd
+ssh-keygen -A
+/usr/sbin/sshd -t
+/usr/sbin/sshd -E /tmp/sshd.log
+started=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  for pid_file in /run/sshd.pid /var/run/sshd.pid; do
+    if [ -s "$pid_file" ]; then
+      sshd_pid="$(cat "$pid_file" 2>/dev/null || true)"
+      if [ -n "$sshd_pid" ] && kill -0 "$sshd_pid" 2>/dev/null; then
+        started=1
+        break 2
+      fi
+    fi
+  done
+  sleep 0.1
+done
+if [ "$started" -ne 1 ]; then
+  echo "sshd did not start correctly." >&2
+  cat /tmp/sshd.log >&2 || true
+  exit 1
+fi
 GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
         `,
       ],
@@ -237,6 +403,8 @@ GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WOR
           REPO_URL: repoUrl,
           REPO_REF: repoRef,
           WORKSPACE_PATH,
+          GITHUB_LOGIN: authUser.github.login,
+          SSH_USER: sshUser,
         },
         secrets: [githubAuthSecret],
       },
@@ -277,7 +445,7 @@ export async function listSessionRecords(
   db: AppDb,
   ownerUserId: string,
 ): Promise<SessionRecord[]> {
-  return listSessions(db, ownerUserId).map(toPublic);
+  return listSessions(db, ownerUserId).map((record) => toPublic(record));
 }
 
 export async function getSessionRecord(
@@ -286,7 +454,18 @@ export async function getSessionRecord(
   id: string,
 ): Promise<SessionRecord> {
   const record = await mustGetSession(db, ownerUserId, id);
-  return toPublic(record);
+  const authUser = getAuthUserById(db, ownerUserId);
+  if (!authUser) {
+    return toPublic(record, { ssh: null });
+  }
+
+  const sshUser = authUser.github.login.trim();
+  if (!isValidLinuxUsername(sshUser)) {
+    return toPublic(record, { ssh: null });
+  }
+
+  const ssh = await resolveSessionSshInfo(record, sshUser);
+  return toPublic(record, { ssh });
 }
 
 export async function terminateSessionRecord(
