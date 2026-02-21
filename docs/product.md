@@ -10,6 +10,7 @@
 - Session creation, listing, detail view, command execution, agent execution, termination, and deletion.
 - GitHub login is required, and each user can view/manage only their own Sessions.
 - Repository bootstrap supports both public and private GitHub repositories.
+- Session bootstrap configures GitHub HTTPS credentials inside each Session so subsequent git operations in the Session can access private GitHub repositories without re-authentication.
 - Agent execution is based on Claude Code SDK, concentrating development work into remote execution.
 
 ## Terminology

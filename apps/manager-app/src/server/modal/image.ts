@@ -12,7 +12,7 @@ export function getSessionImage(): Image {
   image = modal.images
     .fromRegistry("node:22-bookworm-slim")
     .dockerfileCommands([
-      "RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*",
+      "RUN apt-get update && apt-get install -y --no-install-recommends git gh ca-certificates && rm -rf /var/lib/apt/lists/*",
       "RUN mkdir -p /opt/agent-sdk && cd /opt/agent-sdk && npm init -y && npm install @anthropic-ai/claude-agent-sdk",
       "RUN mkdir -p /workspace",
       "WORKDIR /workspace",
