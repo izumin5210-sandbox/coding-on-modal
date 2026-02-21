@@ -1,5 +1,14 @@
 export type SessionStatus = "creating" | "running" | "terminated" | "error";
 
+export type SessionSshInfo = {
+  user: string;
+  host: string;
+  port: number;
+  hostKeyFingerprint: string;
+  knownHostsEntry: string;
+  command: string;
+};
+
 export type SessionRecord = {
   id: string;
   name: string;
@@ -10,6 +19,7 @@ export type SessionRecord = {
   createdAt: string;
   updatedAt: string;
   lastError?: string;
+  ssh?: SessionSshInfo | null;
 };
 
 export type SessionExecResult = {
