@@ -10,6 +10,8 @@
 - Session creation, listing, detail view, command execution, agent execution, termination, and deletion.
 - GitHub login is required, and each user can view/manage only their own Sessions.
 - Repository bootstrap supports both public and private GitHub repositories.
+- Session bootstrap configures GitHub HTTPS credentials inside each Session so subsequent git operations in the Session can access private GitHub repositories without re-authentication.
+- Session bootstrap configures SSH login access using the user's GitHub-registered public keys, and Session detail exposes SSH connection information.
 - Agent execution is based on Claude Code SDK, concentrating development work into remote execution.
 - Before the first Session launch, users must configure their own Claude token in a modal and save it for subsequent agent runs.
 
@@ -34,4 +36,4 @@
 - Add explicit session revoke controls and audit trails for authentication events.
 - Strengthen long-term credential lifecycle management (token refresh/retry and alerting).
 - Expand coding-agent interaction channels beyond Web UI to external chat platforms such as Slack.
-- Support operations where developers enter a session via SSH and run coding agents directly from CLI.
+- Improve SSH operations with key rotation/re-sync workflows and auditability enhancements.

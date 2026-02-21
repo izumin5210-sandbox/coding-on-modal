@@ -18,7 +18,7 @@
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
-- `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle and execution logic.
+- `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle, Session bootstrap (repository clone, GitHub credential initialization, SSH user/key bootstrap), SSH connection metadata resolution, and execution logic.
 - `apps/manager-app/src/server/sessions/store.ts`: Drizzle-based persistence access with injected `db`.
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
@@ -28,7 +28,7 @@
 - UI layer: Input/output handling and user interaction orchestration.
 - API layer: HTTP boundary, validation/error handling, DB acquisition (`getDb()`), and auth guard application.
 - Auth layer: OAuth callback handling, JWT issuance/verification, and user identity resolution.
-- Service layer: Session state transitions and orchestration of Modal/agent operations.
+- Service layer: Session state transitions, GitHub credential + SSH bootstrap inside Session runtime, Session detail SSH metadata resolution, and orchestration of Modal/agent operations.
 - Store layer: DB reads/writes via Drizzle with explicit `db` injection and owner-scoped access patterns.
 - Credential storage: store GitHub OAuth and Claude tokens encrypted at rest via `server/crypto/token.ts`.
 - Infra layer: Modal image construction and external service integration.
