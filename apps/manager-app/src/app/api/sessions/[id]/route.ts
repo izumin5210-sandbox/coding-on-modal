@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { AuthError, requireAuthenticatedUser } from "@/server/auth/session";
 import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
@@ -16,13 +17,17 @@ type Params = {
   }>;
 };
 
-export async function GET(_: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
   const db = getDb();
   try {
-    const session = await getSessionRecord(db, id);
+    const user = requireAuthenticatedUser(db, request);
+    const session = await getSessionRecord(db, user.id, id);
     return NextResponse.json({ session });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return jsonError(error.statusCode, error.message);
+    }
     if (error instanceof SessionError) {
       return jsonError(error.statusCode, error.message);
     }
@@ -33,17 +38,21 @@ export async function GET(_: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(_: Request, { params }: Params) {
+export async function DELETE(request: Request, { params }: Params) {
   const { id } = await params;
   const db = getDb();
   try {
-    const deleted = await deleteSessionRecord(db, id);
+    const user = requireAuthenticatedUser(db, request);
+    const deleted = await deleteSessionRecord(db, user.id, id);
     if (!deleted) {
       return jsonError(404, `Session not found: ${id}`);
     }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (error instanceof AuthError) {
+      return jsonError(error.statusCode, error.message);
+    }
     return jsonError(
       500,
       error instanceof Error ? error.message : "Internal error",

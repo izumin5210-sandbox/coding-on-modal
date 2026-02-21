@@ -8,7 +8,8 @@
 
 ## Current Product Scope
 - Session creation, listing, detail view, command execution, agent execution, termination, and deletion.
-- The initial phase is operated with a single fixed user.
+- GitHub login is required, and each user can view/manage only their own Sessions.
+- Repository bootstrap supports both public and private GitHub repositories.
 - Agent execution is based on Claude Code SDK, concentrating development work into remote execution.
 
 ## Terminology
@@ -22,12 +23,13 @@
 - Failures should be diagnosable from both API and UI.
 
 ## Explicit Non-Goals (Current Phase)
-- Completion of multi-user authentication/authorization.
+- Role-based permission management beyond owner-only access.
+- Organization-based login restriction or allowlist management.
 - Cross-account usage based on shared billing or shared contracts.
 - Public offering as a general-purpose PaaS.
 
 ## Roadmap Direction
-- Add user authentication next and strengthen session isolation.
-- Migrate from single-user token operation to user-scoped credential management.
+- Add explicit session revoke controls and audit trails for authentication events.
+- Strengthen long-term credential lifecycle management (token refresh/retry and alerting).
 - Expand coding-agent interaction channels beyond Web UI to external chat platforms such as Slack.
 - Support operations where developers enter a session via SSH and run coding agents directly from CLI.

@@ -9,11 +9,23 @@ Create `apps/manager-app/.env.local`:
 ```bash
 MODAL_TOKEN_ID=ak-...
 MODAL_TOKEN_SECRET=as-...
+AUTH_JWT_SECRET=replace-with-long-random-secret-at-least-32-chars
+TOKEN_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+GITHUB_CLIENT_ID=Iv1...
+GITHUB_CLIENT_SECRET=...
+GITHUB_OAUTH_CALLBACK_URL=http://localhost:3000/api/auth/github/callback
 SESSION_USER_AUTH_TOKEN=your-claude-setup-token
 ```
 
-`SESSION_USER_AUTH_TOKEN` is the single-user token for now.  
-Generate it with `claude setup-token` on the user account that owns the Claude subscription.
+- `TOKEN_ENCRYPTION_KEY` must be base64 encoded 32-byte key.
+- `GITHUB_OAUTH_CALLBACK_URL` must match your GitHub OAuth App settings.
+- `SESSION_USER_AUTH_TOKEN` is still used for Claude Agent SDK execution.
+
+Generate secrets locally:
+
+```bash
+node -e 'console.log(require(\"node:crypto\").randomBytes(32).toString(\"base64\"))'
+```
 
 Optional:
 
@@ -31,6 +43,8 @@ SESSION_DB_PATH=apps/manager-app/data/manager.db
 ## Run
 
 ```bash
+# (Important) remove old session rows before applying migration that adds owner_user_id.
+# sqlite3 apps/manager-app/data/manager.db "delete from sessions;"
 pnpm --filter manager-app db:migrate
 pnpm --filter manager-app dev
 ```
@@ -48,6 +62,21 @@ Open `http://localhost:3000`.
 
 ## Session flow
 
-1. Create a Session from UI.
-2. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
-3. Run shell commands from the manager UI.
+1. Sign in with GitHub from UI.
+2. Create a Session from UI (public/private GitHub repositories supported with your OAuth token).
+3. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with the setup-token).
+4. Run shell commands from the manager UI.
+
+## Auth flow
+
+1. `GET /api/auth/github/login` redirects to GitHub OAuth authorize endpoint with `state` + PKCE.
+2. `GET /api/auth/github/callback` exchanges code, stores/upserts user + GitHub data, and sets JWT cookie.
+3. `GET /api/me` resolves current user from JWT cookie.
+4. `POST /api/auth/logout` clears JWT cookie.
+
+## Data model
+
+- `users`: app-level user identity.
+- `github_accounts`: GitHub profile linked 1:1 to `users`.
+- `github_credentials`: encrypted GitHub OAuth credentials linked 1:1 to `github_accounts`.
+- `sessions.owner_user_id`: owner isolation for all Session operations.

@@ -8,6 +8,7 @@ import type {
   SessionRecord,
   SessionStatus,
 } from "@/lib/session-types";
+import { decryptToken } from "@/server/crypto/token";
 import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
@@ -20,6 +21,7 @@ import {
   type SessionStoreRecord,
   updateSession,
 } from "@/server/sessions/store";
+import { getEncryptedGithubAccessTokenByUserId } from "@/server/users/store";
 
 const WORKSPACE_PATH = "/workspace/repo";
 const AGENT_SDK_WORKDIR = "/opt/agent-sdk";
@@ -110,7 +112,7 @@ async function refreshStatus(
 
     if (nextStatus !== record.status) {
       return (
-        updateSession(db, record.id, {
+        updateSession(db, record.ownerUserId, record.id, {
           status: nextStatus,
         }) ?? record
       );
@@ -120,7 +122,7 @@ async function refreshStatus(
   } catch (error) {
     if (error instanceof NotFoundError) {
       return (
-        updateSession(db, record.id, {
+        updateSession(db, record.ownerUserId, record.id, {
           status: "terminated",
           lastError: record.lastError,
         }) ?? record
@@ -169,9 +171,10 @@ async function runCommand(
 
 async function mustGetSession(
   db: AppDb,
+  ownerUserId: string,
   id: string,
 ): Promise<SessionStoreRecord> {
-  const record = getSession(db, id);
+  const record = getSession(db, ownerUserId, id);
   if (!record) {
     throw notFound(id);
   }
@@ -181,6 +184,7 @@ async function mustGetSession(
 
 export async function createSession(
   db: AppDb,
+  ownerUserId: string,
   input: CreateSessionInput,
 ): Promise<SessionRecord> {
   const env = getEnv();
@@ -189,6 +193,17 @@ export async function createSession(
     `session-${new Date().toISOString().slice(0, 10)}-${Math.floor(Math.random() * 10_000)}`;
   const repoUrl = input.repoUrl?.trim() || env.DEFAULT_REPO_URL;
   const repoRef = input.repoRef?.trim() || env.DEFAULT_REPO_REF;
+  const encryptedGithubToken = getEncryptedGithubAccessTokenByUserId(
+    db,
+    ownerUserId,
+  );
+  if (!encryptedGithubToken) {
+    throw new SessionError(
+      "GitHub credential was not found. Please log in with GitHub again.",
+      401,
+    );
+  }
+  const githubToken = decryptToken(encryptedGithubToken);
 
   const modal = getModalClient();
   const [app, image] = await Promise.all([getModalApp(), getSessionImage()]);
@@ -202,16 +217,39 @@ export async function createSession(
   let lastError: string | undefined;
 
   try {
-    const cloneResult = await runCommand(providerSession.sandboxId, [
-      "git",
-      "clone",
-      "--depth",
-      "1",
-      "--branch",
-      repoRef,
-      repoUrl,
-      WORKSPACE_PATH,
-    ]);
+    const cloneResult = await runCommand(
+      providerSession.sandboxId,
+      [
+        "sh",
+        "-lc",
+        `
+set -eu
+ASKPASS="$(mktemp)"
+cleanup() {
+  rm -f "$ASKPASS"
+}
+trap cleanup EXIT
+cat <<'EOF' > "$ASKPASS"
+#!/bin/sh
+case "$1" in
+  *Username*) echo "x-access-token" ;;
+  *Password*) echo "$GITHUB_TOKEN" ;;
+  *) echo "" ;;
+esac
+EOF
+chmod 700 "$ASKPASS"
+GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
+        `,
+      ],
+      {
+        env: {
+          GITHUB_TOKEN: githubToken,
+          REPO_URL: repoUrl,
+          REPO_REF: repoRef,
+          WORKSPACE_PATH,
+        },
+      },
+    );
 
     if (cloneResult.exitCode !== 0) {
       status = "error";
@@ -228,6 +266,7 @@ export async function createSession(
   const now = new Date().toISOString();
   const record: SessionStoreRecord = {
     id: createSessionId(),
+    ownerUserId,
     providerSessionId: providerSession.sandboxId,
     name,
     repoUrl,
@@ -243,23 +282,28 @@ export async function createSession(
   return toPublic(record);
 }
 
-export async function listSessionRecords(db: AppDb): Promise<SessionRecord[]> {
-  return listSessions(db).map(toPublic);
+export async function listSessionRecords(
+  db: AppDb,
+  ownerUserId: string,
+): Promise<SessionRecord[]> {
+  return listSessions(db, ownerUserId).map(toPublic);
 }
 
 export async function getSessionRecord(
   db: AppDb,
+  ownerUserId: string,
   id: string,
 ): Promise<SessionRecord> {
-  const record = await mustGetSession(db, id);
+  const record = await mustGetSession(db, ownerUserId, id);
   return toPublic(record);
 }
 
 export async function terminateSessionRecord(
   db: AppDb,
+  ownerUserId: string,
   id: string,
 ): Promise<SessionRecord> {
-  const record = await mustGetSession(db, id);
+  const record = await mustGetSession(db, ownerUserId, id);
 
   try {
     const providerSession = await getModalClient().sandboxes.fromId(
@@ -273,7 +317,7 @@ export async function terminateSessionRecord(
   }
 
   const updated =
-    updateSession(db, id, {
+    updateSession(db, ownerUserId, id, {
       status: "terminated",
     }) ?? record;
 
@@ -282,17 +326,19 @@ export async function terminateSessionRecord(
 
 export async function deleteSessionRecord(
   db: AppDb,
+  ownerUserId: string,
   id: string,
 ): Promise<boolean> {
-  return deleteSession(db, id);
+  return deleteSession(db, ownerUserId, id);
 }
 
 export async function executeInSession(
   db: AppDb,
+  ownerUserId: string,
   id: string,
   input: ExecSessionInput,
 ): Promise<SessionExecResult> {
-  const record = await mustGetSession(db, id);
+  const record = await mustGetSession(db, ownerUserId, id);
   if (record.status === "terminated") {
     throw new SessionError("Session is terminated", 409);
   }
@@ -309,7 +355,7 @@ export async function executeInSession(
     });
   } catch (error) {
     if (error instanceof NotFoundError) {
-      updateSession(db, id, { status: "terminated" });
+      updateSession(db, ownerUserId, id, { status: "terminated" });
       throw new SessionError("Session no longer exists", 409);
     }
 
@@ -319,6 +365,7 @@ export async function executeInSession(
 
 export async function runAgentInSession(
   db: AppDb,
+  ownerUserId: string,
   id: string,
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
@@ -331,7 +378,7 @@ export async function runAgentInSession(
     );
   }
 
-  const record = await mustGetSession(db, id);
+  const record = await mustGetSession(db, ownerUserId, id);
   if (record.status === "terminated") {
     throw new SessionError("Session is terminated", 409);
   }
@@ -368,7 +415,7 @@ export async function runAgentInSession(
     );
   } catch (error) {
     if (error instanceof NotFoundError) {
-      updateSession(db, id, { status: "terminated" });
+      updateSession(db, ownerUserId, id, { status: "terminated" });
       throw new SessionError("Session no longer exists", 409);
     }
 
