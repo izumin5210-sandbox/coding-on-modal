@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { runAgentQuery } from "./lib/agent.js";
 import { executeShell } from "./lib/exec.js";
+import { CLAUDE_TOKEN_HEADER } from "./constants.js";
 import {
   agentResponseSchema,
   agentRequestSchema,
@@ -10,8 +11,6 @@ import {
   execResponseSchema,
   healthzResponseSchema,
 } from "./types.js";
-
-export const CLAUDE_TOKEN_HEADER = "x-session-runtime-claude-token";
 
 export function createSessionRuntimeApiApp() {
   const rpcApp = new Hono()
