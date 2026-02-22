@@ -9,6 +9,7 @@
 - Build the Modal image on a Node.js base and use `/workspace` as the working directory.
 - Execute agents inside sessions via `@anthropic-ai/claude-agent-sdk`.
 - Adopt an API-driven execution model instead of a persistent terminal relay such as `ttyd`.
+- Run a lightweight Hono RPC server inside each Session (sandbox-internal runtime API) for stable `exec` / agent operations, and call it from `manager-app` using Modal Sandbox Connect Token.
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
@@ -34,6 +35,7 @@
 - Avoid exposing Modal-specific concepts excessively in UI/API.
 - Acquire `db` in API handlers and pass it into service/store layers via dependency injection.
 - Return SSH connection metadata from Session detail API (`GET /api/sessions/{id}`) and keep list API lightweight.
+- Keep the sandbox-internal runtime API private to `manager-app` access paths (Connect Token based), and do not expose it as a public user-facing API surface.
 
 ## Operational Constraints
 - Fail fast with explicit errors when required environment variables are missing.
