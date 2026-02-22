@@ -2,12 +2,12 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { hc } from "hono/client";
-import { CLAUDE_TOKEN_HEADER } from "session-runtime-api/contract";
-import type { SessionRuntimeAppType } from "session-runtime-api";
 import {
   agentResponseSchema,
+  CLAUDE_TOKEN_HEADER,
   execResponseSchema,
-} from "session-runtime-api/contract";
+} from "session-runtime-api";
+import type { SessionRuntimeAppType } from "session-runtime-api";
 import type {
   AgentSessionInput,
   ExecSessionInput,

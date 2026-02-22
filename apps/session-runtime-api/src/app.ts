@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { CLAUDE_TOKEN_HEADER } from "./contract.js";
 import { runAgentQuery } from "./lib/agent.js";
 import { executeShell } from "./lib/exec.js";
 import {
@@ -11,6 +10,8 @@ import {
   execResponseSchema,
   healthzResponseSchema,
 } from "./types.js";
+
+export const CLAUDE_TOKEN_HEADER = "x-session-runtime-claude-token";
 
 export function createSessionRuntimeApiApp() {
   const rpcApp = new Hono()
@@ -82,4 +83,3 @@ export function createSessionRuntimeApiApp() {
 
 export const app = createSessionRuntimeApiApp();
 export type SessionRuntimeAppType = typeof app;
-export { CLAUDE_TOKEN_HEADER };
