@@ -321,6 +321,10 @@ export async function createSession(
     );
   }
   const githubToken = decryptToken(encryptedGithubToken);
+  const encryptedClaudeToken = getEncryptedClaudeTokenByUserId(db, ownerUserId);
+  const claudeToken = encryptedClaudeToken
+    ? decryptToken(encryptedClaudeToken)
+    : "";
 
   const modal = getModalClient();
   const [app, image] = await Promise.all([getModalApp(), getSessionImage()]);
@@ -335,8 +339,9 @@ export async function createSession(
   let lastError: string | undefined;
 
   try {
-    const githubAuthSecret = await modal.secrets.fromObject({
+    const bootstrapSecret = await modal.secrets.fromObject({
       SESSION_GITHUB_TOKEN: githubToken,
+      SESSION_CLAUDE_AUTH_TOKEN: claudeToken,
     });
     const cloneResult = await runCommand(
       providerSession.sandboxId,
@@ -348,13 +353,40 @@ set -eu
 printf '%s\n' "$SESSION_GITHUB_TOKEN" | env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token
 env -u GH_TOKEN -u GITHUB_TOKEN gh auth setup-git --hostname github.com
 if ! id -u "$SSH_USER" >/dev/null 2>&1; then
-  useradd --create-home --shell /bin/bash "$SSH_USER"
+  useradd --create-home --shell /bin/bash --groups sudo "$SSH_USER"
+fi
+if ! id -nG "$SSH_USER" | tr ' ' '\n' | grep -qx sudo; then
+  usermod -aG sudo "$SSH_USER"
 fi
 home_dir="$(getent passwd "$SSH_USER" | cut -d: -f6)"
 if [ -z "$home_dir" ]; then
   echo "Failed to resolve SSH user home directory: $SSH_USER" >&2
   exit 1
 fi
+session_env_dir="$home_dir/.config"
+session_env_file="$session_env_dir/session-env.sh"
+install -d -m 700 -o "$SSH_USER" -g "$SSH_USER" "$session_env_dir"
+if [ -n "\${SESSION_CLAUDE_AUTH_TOKEN:-}" ]; then
+  escaped_claude_token="$(printf '%s' "$SESSION_CLAUDE_AUTH_TOKEN" | sed "s/'/'\\\\''/g")"
+  {
+    printf "export ANTHROPIC_AUTH_TOKEN='%s'\n" "$escaped_claude_token"
+    printf "export CLAUDE_CODE_OAUTH_TOKEN='%s'\n" "$escaped_claude_token"
+  } > "$session_env_file"
+  chown "$SSH_USER:$SSH_USER" "$session_env_file"
+  chmod 600 "$session_env_file"
+  for rc_file in "$home_dir/.profile" "$home_dir/.bashrc"; do
+    touch "$rc_file"
+    if ! grep -Fqx '[ -f "$HOME/.config/session-env.sh" ] && . "$HOME/.config/session-env.sh"' "$rc_file"; then
+      printf '\n[ -f "$HOME/.config/session-env.sh" ] && . "$HOME/.config/session-env.sh"\n' >> "$rc_file"
+    fi
+    chown "$SSH_USER:$SSH_USER" "$rc_file"
+  done
+fi
+cat <<EOF >/etc/sudoers.d/90-session-user
+$SSH_USER ALL=(ALL) NOPASSWD:ALL
+EOF
+chmod 440 /etc/sudoers.d/90-session-user
+visudo -cf /etc/sudoers.d/90-session-user
 install -d -m 700 -o "$SSH_USER" -g "$SSH_USER" "$home_dir/.ssh"
 gh api --hostname github.com "/users/$GITHUB_LOGIN/keys" --jq '.[].key' > "$home_dir/.ssh/authorized_keys"
 if [ ! -s "$home_dir/.ssh/authorized_keys" ]; then
@@ -396,7 +428,7 @@ GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WOR
           GITHUB_LOGIN: authUser.github.login,
           SSH_USER: sshUser,
         },
-        secrets: [githubAuthSecret],
+        secrets: [bootstrapSecret],
       },
     );
 

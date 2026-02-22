@@ -39,6 +39,8 @@ AGENT_MAX_TURNS=8
 SESSION_DB_PATH=apps/manager-app/data/manager.db
 ```
 
+Session image includes `git`, `gh`, `curl`, `openssh-server`, `sudo`, and Claude Code CLI (`claude`) pinned to `2.1.29` (auto-update disabled).
+
 ## Run
 
 ```bash
@@ -65,8 +67,10 @@ Open `http://localhost:3000`.
 2. Create a Session from UI. If Claude token is not configured yet, the app opens a modal and asks you to save it first.
 3. Session creation resumes automatically after token save (public/private GitHub repositories supported with your OAuth token).
 4. Session bootstrap enables SSH login with your GitHub-registered public keys.
-5. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with your saved token).
-6. Run shell commands from the manager UI.
+5. The SSH user is granted passwordless `sudo` inside the Session.
+6. If Claude token is configured, Session shell startup exports `ANTHROPIC_AUTH_TOKEN` (and compatibility `CLAUDE_CODE_OAUTH_TOKEN`) for the SSH user.
+7. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with your saved token).
+8. Run shell commands from the manager UI.
 
 ## Auth flow
 
