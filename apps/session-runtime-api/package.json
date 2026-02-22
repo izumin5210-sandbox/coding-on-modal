@@ -8,10 +8,11 @@
     "./contract": "./src/contract.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "rm -rf dist && tsc -p tsconfig.json --noEmit && esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --external:@anthropic-ai/claude-agent-sdk --outfile=dist/server.js"
   },
   "devDependencies": {
-    "@types/node": "^20"
+    "@types/node": "^20",
+    "esbuild": "^0.27.3"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.22",

@@ -10,6 +10,7 @@
 - Execute agents inside sessions via `@anthropic-ai/claude-agent-sdk`.
 - Adopt an API-driven execution model instead of a persistent terminal relay such as `ttyd`.
 - Run a lightweight Hono RPC server inside each Session (sandbox-internal runtime API) for stable `exec` / agent operations, and call it from `manager-app` using Modal Sandbox Connect Token.
+- Bundle the sandbox-internal runtime API into a single JavaScript artifact (`dist/server.js`) before Session creation, and copy that artifact into the Session runtime to reduce dependency drift.
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
