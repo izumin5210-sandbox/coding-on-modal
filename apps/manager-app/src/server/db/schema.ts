@@ -48,6 +48,20 @@ export const githubCredentials = sqliteTable(
   ],
 );
 
+export const claudeCredentials = sqliteTable(
+  "claude_credentials",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenEncrypted: text("token_encrypted").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("uidx_claude_credentials_user_id").on(table.userId)],
+);
+
 export const sessions = sqliteTable(
   "sessions",
   {
@@ -75,3 +89,4 @@ export type SessionRow = typeof sessions.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type GithubAccountRow = typeof githubAccounts.$inferSelect;
 export type GithubCredentialRow = typeof githubCredentials.$inferSelect;
+export type ClaudeCredentialRow = typeof claudeCredentials.$inferSelect;

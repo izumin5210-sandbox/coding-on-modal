@@ -12,15 +12,20 @@
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
+- Include baseline CLI utilities in the Session image (for example, `curl`) and install `sudo`.
+- Preinstall Claude Code CLI in the Session image and pin it to a known-good version (`2.1.29`) while disabling auto-update to avoid TUI regressions from newer releases.
 - In the future, enable the same agent execution foundation to be called from non-Web channels (for example, Slack).
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
-- Request `read:user user:email repo read:org gist` GitHub OAuth scopes to support Session bootstrap with `gh auth`.
 - Persist app users in `users`; persist GitHub profile in `github_accounts`; persist encrypted OAuth tokens in `github_credentials`; persist encrypted Claude token in `claude_credentials`.
 - Protect all `/api/sessions/*` endpoints with authentication and enforce owner-only access by `sessions.owner_user_id`.
+- Use authenticated user's GitHub OAuth token when cloning repositories (public/private), injected via `GIT_ASKPASS` to avoid token leakage in command arguments.
+- Request `read:user user:email repo read:org gist` GitHub OAuth scopes to support Session bootstrap with `gh auth`.
 - Initialize GitHub authentication in each Session using `gh auth login --with-token` and `gh auth setup-git` for `github.com` over HTTPS, then rely on git credential helper integration for clone/fetch/pull/push.
 - Fetch GitHub public keys for the authenticated user's login at Session creation time and apply them to Session `authorized_keys` for SSH login.
+- Grant the Session SSH user passwordless `sudo` to allow package installation and local system setup during interactive SSH usage.
+- If a per-user Claude token is configured, write shell startup exports for `ANTHROPIC_AUTH_TOKEN` (and compatibility `CLAUDE_CODE_OAUTH_TOKEN`) in the Session SSH user's shell profile.
 - When the GitHub token is updated, apply the new token to newly created Sessions only; existing running Sessions keep their previously initialized credentials until recreated.
 - Require per-user Claude token for Claude Agent SDK execution; do not use environment-variable fallback tokens.
 
