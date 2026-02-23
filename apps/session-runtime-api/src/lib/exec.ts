@@ -17,5 +17,7 @@ export async function executeShell(input: ExecRequest): Promise<ExecResult> {
     };
   }
 
-  return runCommand(["sh", "-lc", cmd], { cwd });
+  return runCommand(["sh", "-lc", cmd], {
+    cwd,
+  });
 }

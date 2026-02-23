@@ -61,6 +61,15 @@ function resolveSessionSshUser(githubLogin: string): string {
   return normalized;
 }
 
+function resolveSessionLinuxUser(db: AppDb, ownerUserId: string): string {
+  const authUser = getAuthUserById(db, ownerUserId);
+  if (!authUser) {
+    throw new SessionError("Authentication required", 401);
+  }
+
+  return resolveSessionSshUser(authUser.github.login);
+}
+
 function toPublic(
   record: SessionStoreRecord,
   options?: { ssh?: SessionSshInfo | null },
@@ -357,6 +366,7 @@ if [ "$started" -ne 1 ]; then
   exit 1
 fi
 GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
+chown -R "$SSH_USER:$SSH_USER" "$WORKSPACE_PATH"
         `,
       ],
       {
@@ -474,6 +484,7 @@ export async function executeInSession(
   id: string,
   input: ExecSessionInput,
 ): Promise<SessionExecResult> {
+  const linuxUser = resolveSessionLinuxUser(db, ownerUserId);
   const record = await mustGetSession(db, ownerUserId, id);
   if (record.status === "terminated") {
     throw new SessionError("Session is terminated", 409);
@@ -489,7 +500,7 @@ export async function executeInSession(
       cmd: command,
       cwd: input.cwd?.trim() || record.workspacePath,
       pty: input.pty ?? true,
-    });
+    }, linuxUser);
   } catch (error) {
     if (error instanceof NotFoundError) {
       updateSession(db, ownerUserId, id, { status: "terminated" });
@@ -507,6 +518,7 @@ export async function runAgentInSession(
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
   const env = getEnv();
+  const linuxUser = resolveSessionLinuxUser(db, ownerUserId);
   const encryptedClaudeToken = getEncryptedClaudeTokenByUserId(db, ownerUserId);
   if (!encryptedClaudeToken) {
     throw new SessionError(
@@ -540,6 +552,7 @@ export async function runAgentInSession(
       },
       authToken,
       env.SANDBOX_TIMEOUT_MINUTES * 60_000,
+      linuxUser,
     );
   } catch (error) {
     if (error instanceof NotFoundError) {

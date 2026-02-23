@@ -20,6 +20,9 @@ importers:
 
   apps/manager-app:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.1.77
+        version: 0.1.77(zod@4.3.6)
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
