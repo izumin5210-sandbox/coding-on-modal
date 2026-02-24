@@ -28,6 +28,13 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
 import type {
   GetSessionChatResponse,
   SendSessionChatMessageResponse,
@@ -103,55 +110,134 @@ function JsonDetails({
   );
 }
 
-function PartView({ part }: { part: SessionChatMessagePart }) {
+type ToolOutcomeState = "output-available" | "output-error";
+
+type ToolPresentationIndex = {
+  nameById: Map<string, string>;
+  outcomeById: Map<string, ToolOutcomeState>;
+};
+
+function ToolLogCard({
+  toolName,
+  toolUseId,
+  state,
+  input,
+  output,
+  errorText,
+  meta,
+}: {
+  toolName: string;
+  toolUseId?: string;
+  state:
+    | "approval-requested"
+    | "approval-responded"
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-denied"
+    | "output-error";
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+  meta?: React.ReactNode;
+}) {
+  return (
+    <Tool defaultOpen={state !== "output-available"} className="mb-0 bg-card">
+      <ToolHeader type="dynamic-tool" toolName={toolName} state={state} />
+      <ToolContent className="space-y-3">
+        {toolUseId ? (
+          <p className="text-xs text-muted-foreground">ID: {toolUseId}</p>
+        ) : null}
+        {meta}
+        {input !== undefined ? <ToolInput input={input as never} /> : null}
+        {output !== undefined || errorText ? (
+          <ToolOutput
+            output={output as never}
+            errorText={(errorText as never) ?? (undefined as never)}
+          />
+        ) : null}
+      </ToolContent>
+    </Tool>
+  );
+}
+
+function PartView({
+  part,
+  toolIndex,
+}: {
+  part: SessionChatMessagePart;
+  toolIndex: ToolPresentationIndex;
+}) {
   switch (part.type) {
     case "text":
       return <MessageResponse>{part.text}</MessageResponse>;
 
-    case "tool-call":
+    case "dynamic-tool":
       return (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-sm text-indigo-950">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-700">
-            Tool Call
-          </div>
-          <p className="font-medium">{part.toolName ?? "(unknown tool)"}</p>
-          <p className="mt-1 text-xs text-indigo-700">ID: {part.toolUseId}</p>
-          {part.input !== undefined ? (
-            <div className="mt-2">
-              <JsonDetails label="Input" value={part.input} />
-            </div>
-          ) : null}
-        </div>
+        <ToolLogCard
+          toolName={part.toolName}
+          toolUseId={part.toolCallId}
+          state={part.state}
+          input={"input" in part ? part.input : undefined}
+          output={part.state === "output-available" ? part.output : undefined}
+          errorText={part.state === "output-error" ? part.errorText : undefined}
+          meta={
+            part.state === "output-denied" ? (
+              <p className="text-xs text-muted-foreground">
+                approval denied
+                {part.approval.reason ? `: ${part.approval.reason}` : ""}
+              </p>
+            ) : undefined
+          }
+        />
       );
+
+    case "tool-call": {
+      const toolState =
+        (part.toolUseId
+          ? toolIndex.outcomeById.get(part.toolUseId)
+          : undefined) ?? "input-available";
+      return (
+        <ToolLogCard
+          toolName={part.toolName ?? "tool"}
+          toolUseId={part.toolUseId}
+          state={toolState}
+          input={part.input}
+        />
+      );
+    }
 
     case "tool-result":
       return (
-        <div
-          className={cn(
-            "rounded-xl border p-3 text-sm",
-            part.isError
-              ? "border-rose-200 bg-rose-50/80 text-rose-950"
-              : "border-emerald-200 bg-emerald-50/80 text-emerald-950",
-          )}
-        >
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em]">
-            Tool Result
-          </div>
-          {part.toolUseId ? (
-            <p className="mb-2 text-xs opacity-80">ID: {part.toolUseId}</p>
-          ) : null}
-          <JsonDetails label="Result" value={part.result} />
-        </div>
+        <ToolLogCard
+          toolName={
+            (part.toolUseId
+              ? toolIndex.nameById.get(part.toolUseId)
+              : undefined) ?? "tool-result"
+          }
+          toolUseId={part.toolUseId}
+          state={part.isError ? "output-error" : "output-available"}
+          output={part.result}
+          errorText={
+            part.isError && typeof part.result === "string"
+              ? part.result
+              : undefined
+          }
+        />
       );
 
     case "tool-progress":
       return (
-        <div className="rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-2 text-sm text-sky-950">
-          <p className="font-medium">{part.toolName}</p>
-          <p className="text-xs text-sky-700">
-            {part.toolUseId} · {part.elapsedSeconds.toFixed(1)}s
-          </p>
-        </div>
+        <ToolLogCard
+          toolName={part.toolName}
+          toolUseId={part.toolUseId}
+          state="input-streaming"
+          meta={
+            <p className="text-xs text-muted-foreground">
+              elapsed: {part.elapsedSeconds.toFixed(1)}s
+            </p>
+          }
+        />
       );
 
     case "tool-summary":
@@ -262,7 +348,13 @@ function PartView({ part }: { part: SessionChatMessagePart }) {
   }
 }
 
-function TranscriptMessage({ message }: { message: SessionChatMessage }) {
+function TranscriptMessage({
+  message,
+  toolIndex,
+}: {
+  message: SessionChatMessage;
+  toolIndex: ToolPresentationIndex;
+}) {
   const isTrace = message.metadata?.visibility === "trace";
   const isSystem = message.role === "system";
   const from = message.role === "user" ? "user" : "assistant";
@@ -288,7 +380,11 @@ function TranscriptMessage({ message }: { message: SessionChatMessage }) {
         </div>
         <div className="space-y-2">
           {message.parts.map((part, index) => (
-            <PartView key={`${message.id}:${part.type}:${index}`} part={part} />
+            <PartView
+              key={`${message.id}:${part.type}:${index}`}
+              part={part}
+              toolIndex={toolIndex}
+            />
           ))}
         </div>
       </MessageContent>
@@ -422,6 +518,34 @@ export default function SessionChatPageClient({
     [data?.messages],
   );
 
+  const toolIndex = useMemo<ToolPresentationIndex>(() => {
+    const nameById = new Map<string, string>();
+    const outcomeById = new Map<string, ToolOutcomeState>();
+
+    for (const message of data?.messages ?? []) {
+      for (const part of message.parts) {
+        if (part.type === "tool-call") {
+          if (
+            part.toolUseId &&
+            part.toolName &&
+            !nameById.has(part.toolUseId)
+          ) {
+            nameById.set(part.toolUseId, part.toolName);
+          }
+          continue;
+        }
+        if (part.type === "tool-result" && part.toolUseId) {
+          outcomeById.set(
+            part.toolUseId,
+            part.isError ? "output-error" : "output-available",
+          );
+        }
+      }
+    }
+
+    return { nameById, outcomeById };
+  }, [data?.messages]);
+
   const session = data?.session ?? null;
   const thread = data?.thread ?? null;
   const isSessionTerminated = session?.status === "terminated";
@@ -520,7 +644,11 @@ export default function SessionChatPageClient({
                 />
               ) : visibleMessages.length > 0 ? (
                 visibleMessages.map((message) => (
-                  <TranscriptMessage key={message.id} message={message} />
+                  <TranscriptMessage
+                    key={message.id}
+                    message={message}
+                    toolIndex={toolIndex}
+                  />
                 ))
               ) : (
                 <ConversationEmptyState

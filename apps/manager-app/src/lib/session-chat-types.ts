@@ -11,11 +11,67 @@ export type SessionChatResultMetrics = {
   totalCostUsd?: number;
 };
 
+export type SessionChatDynamicToolPart =
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "input-streaming";
+      input?: unknown;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "input-available";
+      input: unknown;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-available";
+      input: unknown;
+      output: unknown;
+      preliminary?: boolean;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-error";
+      input: unknown;
+      errorText: string;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-denied";
+      input: unknown;
+      approval: {
+        id: string;
+        approved: false;
+        reason?: string;
+      };
+    };
+
 export type SessionChatMessagePart =
   | {
       type: "text";
       text: string;
     }
+  | SessionChatDynamicToolPart
   | {
       type: "tool-call";
       toolUseId: string;

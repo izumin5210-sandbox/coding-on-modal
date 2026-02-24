@@ -3,6 +3,7 @@ import type {
   GetSessionChatResponse,
   SendSessionChatMessageInput,
   SendSessionChatMessageResponse,
+  SessionChatDynamicToolPart,
   SessionChatMessage,
   SessionChatMessageMetadata,
   SessionChatMessagePart,
@@ -276,6 +277,72 @@ function normalizeMessageParamToParts(
   ];
 }
 
+function extractToolUseIdFromUnknown(value: unknown): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  return getString(value.tool_use_id) ?? getString(value.toolUseId);
+}
+
+function getToolResultErrorText(result: unknown): string {
+  if (typeof result === "string" && result.trim()) {
+    return result;
+  }
+  if (isRecord(result)) {
+    const message =
+      getString(result.error) ??
+      getString(result.message) ??
+      getString(result.stderr);
+    if (message?.trim()) {
+      return message;
+    }
+  }
+  return "Tool execution failed.";
+}
+
+function createDynamicToolInputPart(
+  toolName: string,
+  toolCallId: string,
+  input: unknown,
+  state: "input-available" | "input-streaming" = "input-available",
+): SessionChatDynamicToolPart {
+  return {
+    type: "dynamic-tool",
+    toolName,
+    toolCallId,
+    state,
+    input,
+  };
+}
+
+function createDynamicToolOutputPart(
+  toolName: string,
+  toolCallId: string,
+  input: unknown,
+  result: unknown,
+  isError: boolean,
+): SessionChatDynamicToolPart {
+  if (isError) {
+    return {
+      type: "dynamic-tool",
+      toolName,
+      toolCallId,
+      state: "output-error",
+      input,
+      errorText: getToolResultErrorText(result),
+    };
+  }
+
+  return {
+    type: "dynamic-tool",
+    toolName,
+    toolCallId,
+    state: "output-available",
+    input,
+    output: result,
+  };
+}
+
 function buildResultSummaryText(
   message: Extract<SDKMessage, { type: "result" }>,
 ): string {
@@ -326,10 +393,15 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
 
   if (message.type === "user") {
     const parts = normalizeMessageParamToParts(message.message);
-    if (message.tool_use_result !== undefined) {
+    const hasToolResultInContent = parts.some(
+      (part) => part.type === "tool-result",
+    );
+    if (message.tool_use_result !== undefined && !hasToolResultInContent) {
       parts.unshift({
         type: "tool-result",
-        toolUseId: message.parent_tool_use_id ?? undefined,
+        toolUseId:
+          message.parent_tool_use_id ??
+          extractToolUseIdFromUnknown(message.tool_use_result),
         result: message.tool_use_result,
       });
     }
@@ -338,6 +410,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       message.isSynthetic === true ||
       message.parent_tool_use_id !== null ||
       message.tool_use_result !== undefined;
+    const hasToolResult = parts.some((part) => part.type === "tool-result");
 
     const role = isSyntheticLike ? "assistant" : "user";
     return createMessage(
@@ -345,9 +418,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       role,
       parts,
       mergeMetadata(baseMetadata, {
-        visibility: isSyntheticLike ? "trace" : "default",
+        visibility: isSyntheticLike && !hasToolResult ? "trace" : "default",
         label: isSyntheticLike
-          ? "Tool Result / Synthetic User Message"
+          ? hasToolResult
+            ? "Tool Result"
+            : "Synthetic User Message"
           : undefined,
       }),
     );
@@ -538,6 +613,107 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
   );
 }
 
+function synthesizeDynamicToolParts(
+  messages: SessionChatMessage[],
+): SessionChatMessage[] {
+  type ToolRef = {
+    message: SessionChatMessage;
+    partIndex: number;
+  };
+
+  const toolRefById = new Map<string, ToolRef>();
+  const toolNameById = new Map<string, string>();
+  const transformed: SessionChatMessage[] = [];
+
+  for (const sourceMessage of messages) {
+    const message: SessionChatMessage = {
+      ...sourceMessage,
+      parts: [],
+    };
+    transformed.push(message);
+
+    for (const part of sourceMessage.parts) {
+      if (part.type === "tool-call") {
+        const toolName = part.toolName ?? "tool";
+        const dynamicPart = createDynamicToolInputPart(
+          toolName,
+          part.toolUseId,
+          part.input,
+        );
+        const partIndex = message.parts.push(dynamicPart) - 1;
+        toolRefById.set(part.toolUseId, { message, partIndex });
+        toolNameById.set(part.toolUseId, toolName);
+        continue;
+      }
+
+      if (part.type === "tool-progress") {
+        const existingRef = toolRefById.get(part.toolUseId);
+        if (existingRef) {
+          const current = existingRef.message.parts[existingRef.partIndex];
+          if (
+            current?.type === "dynamic-tool" &&
+            (current.state === "input-available" ||
+              current.state === "input-streaming")
+          ) {
+            existingRef.message.parts[existingRef.partIndex] =
+              createDynamicToolInputPart(
+                current.toolName,
+                current.toolCallId,
+                current.input,
+                "input-streaming",
+              );
+          }
+        }
+        message.parts.push(part);
+        continue;
+      }
+
+      if (part.type === "tool-result") {
+        const toolCallId = part.toolUseId;
+        const existingRef = toolCallId
+          ? toolRefById.get(toolCallId)
+          : undefined;
+
+        if (toolCallId && existingRef) {
+          const current = existingRef.message.parts[existingRef.partIndex];
+          if (current?.type === "dynamic-tool") {
+            existingRef.message.parts[existingRef.partIndex] =
+              createDynamicToolOutputPart(
+                current.toolName,
+                current.toolCallId,
+                current.input,
+                part.result,
+                part.isError === true,
+              );
+            continue;
+          }
+        }
+
+        if (toolCallId) {
+          const fallbackToolName = toolNameById.get(toolCallId) ?? "tool";
+          message.parts.push(
+            createDynamicToolOutputPart(
+              fallbackToolName,
+              toolCallId,
+              null,
+              part.result,
+              part.isError === true,
+            ),
+          );
+          continue;
+        }
+
+        message.parts.push(part);
+        continue;
+      }
+
+      message.parts.push(part);
+    }
+  }
+
+  return transformed.filter((message) => message.parts.length > 0);
+}
+
 function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
   return [...messages].sort((a, b) => {
     if (a.createdAt === b.createdAt) {
@@ -554,7 +730,8 @@ function toApiMessages(
   const normalized = envelopes.map((envelope) =>
     normalizeSdkEnvelope(envelope),
   );
-  return sortMessages([...normalized, ...invalidMessages]);
+  const sorted = sortMessages([...normalized, ...invalidMessages]);
+  return synthesizeDynamicToolParts(sorted);
 }
 
 function buildRunSummary(
