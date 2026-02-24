@@ -10,6 +10,8 @@
 - `apps/manager-app/src/app/page.tsx`: Session list/create/execute and agent operation UI.
 - `apps/manager-app/src/app/sessions/[id]/chat/page.tsx`: Session chat page entrypoint.
 - `apps/manager-app/src/app/sessions/[id]/chat/session-chat-page-client.tsx`: Session chat UI client component.
+- `apps/manager-app/src/components/ai-elements/*`: Vercel AI Elements components used to compose chat UI primitives.
+- `apps/manager-app/src/components/ui/*`: shadcn/ui components generated as dependencies for AI Elements.
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
 - `apps/manager-app/src/app/api/me/route.ts`: Authenticated user profile endpoint.

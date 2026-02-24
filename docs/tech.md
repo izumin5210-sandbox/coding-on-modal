@@ -18,6 +18,7 @@
 - In the future, enable the same agent execution foundation to be called from non-Web channels (for example, Slack).
 - Persist Claude Code chat transcripts server-side in SQLite as raw Claude Agent SDK `SDKMessage` JSON records, with UI-oriented shaping performed at read time.
 - Return Session chat messages from the API in a generalized `role + parts[] + metadata` schema (inspired by Vercel AI SDK `UIMessage`) instead of exposing Claude Agent SDK transport message shapes directly.
+- Build the Session chat Web UI with Vercel AI Elements primitives (for example `Conversation`, `Message`, `PromptInput`) and adapt them to the app's generalized chat message schema.
 - Support multi-turn Session chat continuity by resuming Claude Code conversations using Claude Agent SDK `query()` with stored SDK session IDs.
 
 ## Authentication Strategy (Current Phase)
