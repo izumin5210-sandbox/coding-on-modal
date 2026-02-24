@@ -11,5 +11,5 @@ export type AuthUser = {
 
 export type MeResponse = {
   user: AuthUser;
-  claudeTokenConfigured: boolean;
+  claudeApiKeyConfigured: boolean;
 };

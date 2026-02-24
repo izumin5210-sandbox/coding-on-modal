@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const user = requireAuthenticatedUser(db, request);
     const body: MeResponse = {
       user,
-      claudeTokenConfigured: hasClaudeCredentialByUserId(db, user.id),
+      claudeApiKeyConfigured: hasClaudeCredentialByUserId(db, user.id),
     };
     return NextResponse.json(body);
   } catch (error) {

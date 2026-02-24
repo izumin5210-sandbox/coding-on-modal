@@ -18,7 +18,7 @@ GITHUB_OAUTH_CALLBACK_URL=http://localhost:3000/api/auth/github/callback
 
 - `TOKEN_ENCRYPTION_KEY` must be base64 encoded 32-byte key.
 - `GITHUB_OAUTH_CALLBACK_URL` must match your GitHub OAuth App settings.
-- Claude token is configured per user from the UI modal and stored encrypted in DB.
+- Claude API key is configured per user from the UI modal and stored encrypted in DB.
 
 Generate secrets locally:
 
@@ -64,12 +64,12 @@ Open `http://localhost:3000`.
 ## Session flow
 
 1. Sign in with GitHub from UI.
-2. Create a Session from UI. If Claude token is not configured yet, the app opens a modal and asks you to save it first.
-3. Session creation resumes automatically after token save (public/private GitHub repositories supported with your OAuth token).
+2. Create a Session from UI. If Claude API key is not configured yet, the app opens a modal and asks you to save it first.
+3. Session creation resumes automatically after API key save (public/private GitHub repositories supported with your OAuth token).
 4. Session bootstrap enables SSH login with your GitHub-registered public keys.
 5. The SSH user is granted passwordless `sudo` inside the Session.
-6. If Claude token is configured, Session shell startup exports `ANTHROPIC_AUTH_TOKEN` (and compatibility `CLAUDE_CODE_OAUTH_TOKEN`) for the SSH user.
-7. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with your saved token).
+6. If Claude API key is configured, Session shell startup exports `ANTHROPIC_API_KEY` for the SSH user.
+7. Run Agent prompts from the UI (Claude Agent SDK runs inside the Session with your saved API key).
 8. Run shell commands from the manager UI.
 
 ## Auth flow
@@ -84,5 +84,5 @@ Open `http://localhost:3000`.
 - `users`: app-level user identity.
 - `github_accounts`: GitHub profile linked 1:1 to `users`.
 - `github_credentials`: encrypted GitHub OAuth credentials linked 1:1 to `github_accounts`.
-- `claude_credentials`: encrypted Claude token linked 1:1 to `users`.
+- `claude_credentials`: encrypted Claude API key linked 1:1 to `users`.
 - `sessions.owner_user_id`: owner isolation for all Session operations.
