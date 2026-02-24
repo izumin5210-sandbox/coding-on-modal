@@ -18,6 +18,7 @@
 - `apps/manager-app/src/app/api/claude-token/route.ts`: Claude API key save endpoint for authenticated users.
 - `apps/manager-app/src/app/api/sessions/*`: Session CRUD / execute / agent execution APIs.
 - `apps/manager-app/src/app/api/sessions/[id]/chat/route.ts`: Session chat history fetch and chat send APIs.
+- `apps/manager-app/src/app/api/sessions/[id]/chat/user-input/route.ts`: Submit user responses for pending Claude Agent SDK user-input requests in Session chat.
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
@@ -27,6 +28,7 @@
 - `apps/manager-app/src/server/sessions/claude-remote-spawn.ts`: Adapter that bridges Claude Agent SDK `spawnClaudeCodeProcess` to Modal Session `sandbox.exec()` and runs Claude Code as the Session SSH Linux user.
 - `apps/manager-app/src/server/sessions/store.ts`: Drizzle-based persistence access with injected `db`.
 - `apps/manager-app/src/server/sessions/claude-chat-store.ts`: Claude Code chat thread/message persistence (raw SDKMessage JSON storage).
+- `apps/manager-app/src/server/sessions/claude-chat-user-input.ts`: In-memory pending user-input request handling and Claude Agent SDK permission callback bridging for Session chat.
 - `apps/manager-app/src/server/sessions/claude-chat-service.ts`: Session chat orchestration, Claude execution, and UI message shaping.
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.

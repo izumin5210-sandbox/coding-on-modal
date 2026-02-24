@@ -23,6 +23,12 @@ import {
   releaseClaudeChatThreadRunLock,
   updateClaudeChatThread,
 } from "@/server/sessions/claude-chat-store";
+import {
+  clearPendingClaudeChatUserInput,
+  createClaudeChatPermissionPolicy,
+  getPendingClaudeChatUserInput,
+  submitPendingClaudeChatUserInput,
+} from "@/server/sessions/claude-chat-user-input";
 import { createModalClaudeSpawner } from "@/server/sessions/claude-remote-spawn";
 import { getSessionRecord, SessionError } from "@/server/sessions/service";
 import { getSession, updateSession } from "@/server/sessions/store";
@@ -769,6 +775,13 @@ function getSessionMissingStatus(spawner: {
   return spawner.state.sessionMissing;
 }
 
+type SubmitSessionClaudeChatUserInputInput = {
+  requestId: string;
+  behavior: "allow" | "deny";
+  message?: string;
+  answers?: Record<string, string | string[]>;
+};
+
 async function getOrCreateThreadForSession(
   db: AppDb,
   sessionId: string,
@@ -799,13 +812,36 @@ export async function getSessionClaudeChat(
     session.workspacePath,
   );
   const rawMessages = listClaudeChatRawMessages(db, thread.id);
+  let pendingUserInput = getPendingClaudeChatUserInput(sessionId);
+  if (pendingUserInput && !thread.isRunning) {
+    clearPendingClaudeChatUserInput(sessionId);
+    pendingUserInput = null;
+  }
 
   return {
     session,
     thread: toUiThread(thread),
     messages: toApiMessages(rawMessages),
     rawCount: rawMessages.length,
+    pendingUserInput,
   };
+}
+
+export async function submitSessionClaudeChatUserInput(
+  db: AppDb,
+  ownerUserId: string,
+  sessionId: string,
+  input: SubmitSessionClaudeChatUserInputInput,
+): Promise<{ ok: true; resolvedRequestId: string }> {
+  await getSessionRecord(db, ownerUserId, sessionId);
+  const result = submitPendingClaudeChatUserInput({
+    sessionId,
+    requestId: input.requestId,
+    behavior: input.behavior,
+    message: input.message,
+    answers: input.answers,
+  });
+  return { ok: true, resolvedRequestId: result.resolvedRequestId };
 }
 
 export async function sendSessionClaudeChatMessage(
@@ -876,6 +912,11 @@ export async function sendSessionClaudeChatMessage(
     apiKey,
     timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
   });
+  const permissionPolicy = createClaudeChatPermissionPolicy({
+    sessionId,
+  });
+
+  clearPendingClaudeChatUserInput(sessionId);
 
   try {
     for await (const message of query({
@@ -884,8 +925,10 @@ export async function sendSessionClaudeChatMessage(
         cwd,
         maxTurns,
         resume: claudeSdkSessionId,
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
+        permissionMode: permissionPolicy.permissionMode,
+        allowDangerouslySkipPermissions:
+          permissionPolicy.allowDangerouslySkipPermissions,
+        canUseTool: permissionPolicy.canUseTool,
         spawnClaudeCodeProcess: spawner.spawnClaudeCodeProcess,
       },
     })) {
@@ -906,6 +949,7 @@ export async function sendSessionClaudeChatMessage(
       error instanceof Error ? error.message : String(error),
     );
   } finally {
+    clearPendingClaudeChatUserInput(sessionId);
     const sdkMessagesToPersist = rawSdkMessages.some((message) =>
       isCanonicalUserPromptMessage(message),
     )
@@ -949,5 +993,6 @@ export async function sendSessionClaudeChatMessage(
     appendedMessages,
     appendedRawCount: persistedRows.length,
     run: runSummary,
+    pendingUserInput: getPendingClaudeChatUserInput(sessionId),
   };
 }

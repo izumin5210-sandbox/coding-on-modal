@@ -40,6 +40,8 @@ import type {
   SendSessionChatMessageResponse,
   SessionChatMessage,
   SessionChatMessagePart,
+  SessionChatPendingUserInput,
+  SessionChatPendingUserInputAnswerValue,
 } from "@/lib/session-chat-types";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +109,86 @@ function JsonDetails({
         {stringifyJson(value)}
       </pre>
     </details>
+  );
+}
+
+function buildAnswerValue(
+  selected: string[],
+  otherText: string,
+  multiSelect: boolean,
+): SessionChatPendingUserInputAnswerValue | null {
+  const normalizedSelected = selected
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const normalizedOther = otherText.trim();
+  const values = multiSelect
+    ? [
+        ...normalizedSelected,
+        ...(normalizedOther ? [`Other: ${normalizedOther}`] : []),
+      ]
+    : [
+        normalizedSelected[0] ??
+          (normalizedOther ? `Other: ${normalizedOther}` : ""),
+      ].filter(Boolean);
+
+  if (values.length === 0) {
+    return null;
+  }
+  return multiSelect ? values : (values[0] ?? null);
+}
+
+function mergeMessagesById(
+  existing: SessionChatMessage[],
+  appended: SessionChatMessage[],
+): SessionChatMessage[] {
+  const seen = new Set<string>();
+  const merged: SessionChatMessage[] = [];
+
+  for (const message of [...existing, ...appended]) {
+    if (seen.has(message.id)) {
+      continue;
+    }
+    seen.add(message.id);
+    merged.push(message);
+  }
+
+  return merged;
+}
+
+function PendingToolCallBanner({
+  pending,
+}: {
+  pending: SessionChatPendingUserInput;
+}) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-sm text-amber-950">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
+            User Input Required
+          </p>
+          <p className="mt-1 font-medium">
+            {pending.toolName}
+            <span className="ml-2 text-xs font-normal text-amber-700/90">
+              toolUseId: {pending.toolUseId}
+            </span>
+          </p>
+        </div>
+        <span className="text-xs text-amber-700">
+          {formatTime(pending.createdAt)}
+        </span>
+      </div>
+      {pending.decisionReason ? (
+        <p className="mt-2 text-xs text-amber-800">
+          reason: {pending.decisionReason}
+        </p>
+      ) : null}
+      {pending.blockedPath ? (
+        <p className="mt-1 text-xs text-amber-800">
+          path: {pending.blockedPath}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -392,6 +474,174 @@ function TranscriptMessage({
   );
 }
 
+function PendingUserInputPanel({
+  pending,
+  submitting,
+  submitError,
+  denyMessage,
+  onDenyMessageChange,
+  askSelections,
+  askOtherAnswers,
+  onAskSelectionChange,
+  onAskOtherChange,
+  onApprove,
+  onDeny,
+}: {
+  pending: SessionChatPendingUserInput;
+  submitting: boolean;
+  submitError: string | null;
+  denyMessage: string;
+  onDenyMessageChange: (value: string) => void;
+  askSelections: Record<string, string[]>;
+  askOtherAnswers: Record<string, string>;
+  onAskSelectionChange: (
+    header: string,
+    nextValue: string,
+    checked: boolean,
+    multiSelect: boolean,
+  ) => void;
+  onAskOtherChange: (header: string, value: string) => void;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  return (
+    <section className="mx-auto w-full max-w-4xl space-y-3 rounded-3xl border border-amber-200/90 bg-white/95 p-4 shadow-sm">
+      <PendingToolCallBanner pending={pending} />
+
+      {pending.kind === "ask-user-question" ? (
+        <div className="space-y-4">
+          {pending.questions.map((question) => {
+            const selected = askSelections[question.header] ?? [];
+            const other = askOtherAnswers[question.header] ?? "";
+            return (
+              <div
+                key={`${pending.requestId}:${question.header}`}
+                className="rounded-2xl border border-slate-200 bg-white p-4"
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
+                    {question.header}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {question.multiSelect ? "Multiple" : "Single"} choice
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-slate-900">
+                  {question.question}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {question.options.map((option) => {
+                    const checked = selected.includes(option.label);
+                    return (
+                      <label
+                        key={`${question.header}:${option.label}`}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition",
+                          checked
+                            ? "border-sky-300 bg-sky-50"
+                            : "border-slate-200 bg-white hover:border-slate-300",
+                        )}
+                      >
+                        <input
+                          type={question.multiSelect ? "checkbox" : "radio"}
+                          name={`${pending.requestId}:${question.header}`}
+                          value={option.label}
+                          checked={checked}
+                          disabled={submitting}
+                          onChange={(event) =>
+                            onAskSelectionChange(
+                              question.header,
+                              option.label,
+                              event.target.checked,
+                              question.multiSelect,
+                            )
+                          }
+                          className="mt-0.5"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-slate-900">
+                            {option.label}
+                          </span>
+                          <span className="block text-xs text-slate-600">
+                            {option.description}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <label className="mt-3 block text-xs font-medium text-slate-600">
+                  Other (optional)
+                  <input
+                    type="text"
+                    value={other}
+                    onChange={(event) =>
+                      onAskOtherChange(question.header, event.target.value)
+                    }
+                    disabled={submitting}
+                    placeholder="Add your own answer"
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+                </label>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-sm text-slate-700">
+            Claude is asking for approval before continuing this tool call.
+          </p>
+          <JsonDetails label="Tool Input" value={pending.input} />
+          {pending.suggestions ? (
+            <JsonDetails
+              label="Permission Suggestions"
+              value={pending.suggestions}
+            />
+          ) : null}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+        <label className="block text-xs font-medium text-slate-600">
+          Deny message (optional)
+          <textarea
+            value={denyMessage}
+            onChange={(event) => onDenyMessageChange(event.target.value)}
+            disabled={submitting}
+            rows={2}
+            className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-100"
+            placeholder="Optional feedback when denying"
+          />
+        </label>
+        {submitError ? (
+          <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            {submitError}
+          </p>
+        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onApprove}
+            disabled={submitting}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "Submitting..." : "Approve / Continue"}
+          </button>
+          <button
+            type="button"
+            onClick={onDeny}
+            disabled={submitting}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Deny
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function SessionChatPageClient({
   sessionId,
 }: {
@@ -405,31 +655,55 @@ export default function SessionChatPageClient({
   const [cwd, setCwd] = useState("");
   const [maxTurns, setMaxTurns] = useState("8");
   const [showTrace, setShowTrace] = useState(false);
+  const [pendingSubmitError, setPendingSubmitError] = useState<string | null>(
+    null,
+  );
+  const [pendingSubmitting, setPendingSubmitting] = useState(false);
+  const [pendingDenyMessage, setPendingDenyMessage] = useState("");
+  const [pendingAskSelections, setPendingAskSelections] = useState<
+    Record<string, string[]>
+  >({});
+  const [pendingAskOtherAnswers, setPendingAskOtherAnswers] = useState<
+    Record<string, string>
+  >({});
+
+  const refreshChat = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}/chat`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error(await parseError(response));
+        }
+        const body = (await response.json()) as GetSessionChatResponse;
+        setData(body);
+        setCwd(
+          (current) => current || body.thread.cwd || body.session.workspacePath,
+        );
+        setMaxTurns((current) => current || String(body.thread.maxTurns || 8));
+      } catch (loadError) {
+        if (!silent) {
+          setError(
+            loadError instanceof Error ? loadError.message : String(loadError),
+          );
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [sessionId],
+  );
 
   const loadChat = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/sessions/${sessionId}/chat`, {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
-      const body = (await response.json()) as GetSessionChatResponse;
-      setData(body);
-      setCwd(
-        (current) => current || body.thread.cwd || body.session.workspacePath,
-      );
-      setMaxTurns((current) => current || String(body.thread.maxTurns || 8));
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error ? loadError.message : String(loadError),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
+    await refreshChat();
+  }, [refreshChat]);
 
   const submitPrompt = useCallback(
     async (text: string) => {
@@ -471,13 +745,22 @@ export default function SessionChatPageClient({
               thread: body.thread,
               messages: body.appendedMessages,
               rawCount: body.appendedRawCount,
+              pendingUserInput: body.pendingUserInput ?? null,
             };
           }
+          const currentIsAtLeastAsNew =
+            current.thread.updatedAt >= body.thread.updatedAt;
           return {
             session: body.session,
             thread: body.thread,
-            messages: [...current.messages, ...body.appendedMessages],
-            rawCount: current.rawCount + body.appendedRawCount,
+            messages: mergeMessagesById(
+              current.messages,
+              body.appendedMessages,
+            ),
+            rawCount: currentIsAtLeastAsNew
+              ? current.rawCount
+              : current.rawCount + body.appendedRawCount,
+            pendingUserInput: body.pendingUserInput ?? null,
           };
         });
         if (body.run.isError) {
@@ -502,6 +785,133 @@ export default function SessionChatPageClient({
   useEffect(() => {
     void loadChat();
   }, [loadChat]);
+
+  const pendingUserInput = data?.pendingUserInput ?? null;
+  const pendingRequestId = pendingUserInput?.requestId ?? null;
+
+  useEffect(() => {
+    setPendingSubmitError(null);
+    setPendingSubmitting(false);
+    if (pendingRequestId) {
+      setPendingDenyMessage("");
+      setPendingAskSelections({});
+      setPendingAskOtherAnswers({});
+      return;
+    }
+    setPendingDenyMessage("");
+  }, [pendingRequestId]);
+
+  const submitPendingUserInput = useCallback(
+    async (payload: {
+      behavior: "allow" | "deny";
+      answers?: Record<string, SessionChatPendingUserInputAnswerValue>;
+      message?: string;
+    }) => {
+      if (!pendingUserInput || pendingSubmitting) {
+        return;
+      }
+
+      setPendingSubmitting(true);
+      setPendingSubmitError(null);
+      try {
+        const response = await fetch(
+          `/api/sessions/${sessionId}/chat/user-input`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              requestId: pendingUserInput.requestId,
+              behavior: payload.behavior,
+              answers: payload.answers,
+              message: payload.message,
+            }),
+          },
+        );
+        if (!response.ok) {
+          throw new Error(await parseError(response));
+        }
+        setNotice(
+          payload.behavior === "allow"
+            ? `Submitted response for ${pendingUserInput.toolName}.`
+            : `Denied ${pendingUserInput.toolName}.`,
+        );
+        await refreshChat({ silent: true });
+      } catch (submitError) {
+        setPendingSubmitError(
+          submitError instanceof Error
+            ? submitError.message
+            : String(submitError),
+        );
+      } finally {
+        setPendingSubmitting(false);
+      }
+    },
+    [pendingSubmitting, pendingUserInput, refreshChat, sessionId],
+  );
+
+  const handleApprovePendingUserInput = useCallback(async () => {
+    if (!pendingUserInput) {
+      return;
+    }
+    if (pendingUserInput.kind === "ask-user-question") {
+      const answers: Record<string, SessionChatPendingUserInputAnswerValue> =
+        {};
+      for (const question of pendingUserInput.questions) {
+        const selected = pendingAskSelections[question.header] ?? [];
+        const other = pendingAskOtherAnswers[question.header] ?? "";
+        const answer = buildAnswerValue(selected, other, question.multiSelect);
+        if (!answer) {
+          setPendingSubmitError(`Answer required: ${question.header}`);
+          return;
+        }
+        answers[question.question] = answer;
+      }
+      await submitPendingUserInput({
+        behavior: "allow",
+        answers,
+      });
+      return;
+    }
+
+    await submitPendingUserInput({ behavior: "allow" });
+  }, [
+    pendingAskOtherAnswers,
+    pendingAskSelections,
+    pendingUserInput,
+    submitPendingUserInput,
+  ]);
+
+  const handleDenyPendingUserInput = useCallback(async () => {
+    await submitPendingUserInput({
+      behavior: "deny",
+      message: pendingDenyMessage.trim() || undefined,
+    });
+  }, [pendingDenyMessage, submitPendingUserInput]);
+
+  const handleAskSelectionChange = useCallback(
+    (
+      header: string,
+      nextValue: string,
+      checked: boolean,
+      multiSelect: boolean,
+    ) => {
+      setPendingAskSelections((current) => {
+        const prev = current[header] ?? [];
+        if (multiSelect) {
+          const next = checked
+            ? Array.from(new Set([...prev, nextValue]))
+            : prev.filter((value) => value !== nextValue);
+          return { ...current, [header]: next };
+        }
+        return { ...current, [header]: checked ? [nextValue] : [] };
+      });
+    },
+    [],
+  );
+
+  const handleAskOtherChange = useCallback((header: string, value: string) => {
+    setPendingAskOtherAnswers((current) => ({ ...current, [header]: value }));
+  }, []);
 
   const visibleMessages = useMemo(() => {
     const messages = data?.messages ?? [];
@@ -545,6 +955,16 @@ export default function SessionChatPageClient({
 
     return { nameById, outcomeById };
   }, [data?.messages]);
+
+  useEffect(() => {
+    if (!(sending || data?.thread.isRunning || pendingUserInput)) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshChat({ silent: true });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [data?.thread.isRunning, pendingUserInput, refreshChat, sending]);
 
   const session = data?.session ?? null;
   const thread = data?.thread ?? null;
@@ -665,6 +1085,26 @@ export default function SessionChatPageClient({
             <ConversationScrollButton />
           </Conversation>
         </div>
+
+        {pendingUserInput ? (
+          <PendingUserInputPanel
+            pending={pendingUserInput}
+            submitting={pendingSubmitting}
+            submitError={pendingSubmitError}
+            denyMessage={pendingDenyMessage}
+            onDenyMessageChange={setPendingDenyMessage}
+            askSelections={pendingAskSelections}
+            askOtherAnswers={pendingAskOtherAnswers}
+            onAskSelectionChange={handleAskSelectionChange}
+            onAskOtherChange={handleAskOtherChange}
+            onApprove={() => {
+              void handleApprovePendingUserInput();
+            }}
+            onDeny={() => {
+              void handleDenyPendingUserInput();
+            }}
+          />
+        ) : null}
 
         <section className="mx-auto w-full max-w-4xl rounded-3xl border border-slate-200/80 bg-white/90 p-3 shadow-lg backdrop-blur">
           <PromptInput
