@@ -268,17 +268,10 @@ function TranscriptMessage({ message }: { message: SessionChatMessage }) {
   const from = message.role === "user" ? "user" : "assistant";
 
   return (
-    <Message
-      from={from}
-      className={cn(
-        "max-w-full",
-        isSystem && "mx-auto w-full",
-        isTrace && "opacity-90",
-      )}
-    >
+    <Message from={from} className={cn(isTrace && "opacity-90")}>
       <MessageContent
         className={cn(
-          "w-full max-w-full",
+          "max-w-full",
           from === "assistant" &&
             "rounded-xl border border-border/60 bg-card px-4 py-3",
           isSystem && "rounded-xl border border-border/60 bg-card/85 px-4 py-3",
