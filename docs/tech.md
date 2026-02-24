@@ -7,13 +7,13 @@
 
 ## Runtime Strategy
 - Build the Modal image on a Node.js base and use `/workspace` as the working directory.
-- Execute agents inside sessions via `@anthropic-ai/claude-agent-sdk`.
+- Execute `@anthropic-ai/claude-agent-sdk` in `manager-api` and delegate Claude Code CLI process spawning to the Session runtime via `spawnClaudeCodeProcess`.
 - Adopt an API-driven execution model instead of a persistent terminal relay such as `ttyd`.
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
 - Include baseline CLI utilities in the Session image (for example, `curl`) and install `sudo`.
-- Preinstall Claude Code CLI in the Session image and pin it to a known-good version (`2.1.29`) while disabling auto-update to avoid TUI regressions from newer releases.
+- Preinstall Claude Code CLI in the Session image and pin it to a known-good version (`2.1.29`) while disabling auto-update to avoid TUI regressions from newer releases; pin the manager-side Claude Agent SDK to the matching compatible version (`@anthropic-ai/claude-agent-sdk@0.2.29`) and keep a matching SDK package in the Session image only as the spawned Claude process entrypoint (`cli.js`) for remote execution.
 - In the future, enable the same agent execution foundation to be called from non-Web channels (for example, Slack).
 
 ## Authentication Strategy (Current Phase)
@@ -26,6 +26,7 @@
 - Fetch GitHub public keys for the authenticated user's login at Session creation time and apply them to Session `authorized_keys` for SSH login.
 - Grant the Session SSH user passwordless `sudo` to allow package installation and local system setup during interactive SSH usage.
 - If a per-user Claude token is configured, write shell startup exports for `ANTHROPIC_AUTH_TOKEN` (and compatibility `CLAUDE_CODE_OAUTH_TOKEN`) in the Session SSH user's shell profile.
+- Run Claude Code for agent execution as the Session SSH Linux user (mapped from the authenticated user's GitHub login) so file ownership and interactive SSH usage remain aligned.
 - When the GitHub token is updated, apply the new token to newly created Sessions only; existing running Sessions keep their previously initialized credentials until recreated.
 - Require per-user Claude token for Claude Agent SDK execution; do not use environment-variable fallback tokens.
 

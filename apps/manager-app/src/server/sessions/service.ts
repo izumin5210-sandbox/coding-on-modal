@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import { NotFoundError, type Secret } from "modal";
 import type {
   AgentSessionInput,
@@ -14,6 +15,7 @@ import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
 import { getSessionImage } from "@/server/modal/image";
+import { createModalClaudeSpawner } from "@/server/sessions/claude-remote-spawn";
 import {
   deleteSession,
   getSession,
@@ -29,33 +31,9 @@ import {
 } from "@/server/users/store";
 
 const WORKSPACE_PATH = "/workspace/repo";
-const AGENT_SDK_WORKDIR = "/opt/agent-sdk";
 const SESSION_SSH_PORT = 22;
 const SESSION_SSH_TUNNELS_TIMEOUT_MS = 10_000;
 const LINUX_USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
-const AGENT_RUNNER_SOURCE = `
-import { query } from "@anthropic-ai/claude-agent-sdk";
-
-const prompt = process.env.AGENT_PROMPT ?? "";
-const cwd = process.env.AGENT_CWD ?? process.cwd();
-const maxTurns = Number(process.env.AGENT_MAX_TURNS ?? "8");
-
-if (!prompt.trim()) {
-  console.error("AGENT_PROMPT is empty");
-  process.exit(2);
-}
-
-const options = {
-  cwd,
-  maxTurns,
-  permissionMode: "bypassPermissions",
-  allowDangerouslySkipPermissions: true,
-};
-
-for await (const message of query({ prompt, options })) {
-  process.stdout.write(JSON.stringify(message) + "\\n");
-}
-`;
 
 export class SessionError extends Error {
   constructor(
@@ -418,6 +396,9 @@ if [ "$started" -ne 1 ]; then
   exit 1
 fi
 GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKSPACE_PATH"
+chown -R "$SSH_USER:$SSH_USER" "$WORKSPACE_PATH"
+printf '%s\n' "$SESSION_GITHUB_TOKEN" | sudo -H -u "$SSH_USER" env -u GH_TOKEN -u GITHUB_TOKEN gh auth login --hostname github.com --git-protocol https --with-token
+sudo -H -u "$SSH_USER" env -u GH_TOKEN -u GITHUB_TOKEN gh auth setup-git --hostname github.com
         `,
       ],
       {
@@ -555,6 +536,27 @@ export async function executeInSession(
   }
 }
 
+function getAgentErrorExitCode(error: unknown): number {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "exitCode" in error &&
+    typeof (error as { exitCode?: unknown }).exitCode === "number"
+  ) {
+    return (error as { exitCode: number }).exitCode;
+  }
+
+  return 1;
+}
+
+function getAgentErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  return String(error ?? "Agent execution failed");
+}
+
 export async function runAgentInSession(
   db: AppDb,
   ownerUserId: string,
@@ -580,38 +582,65 @@ export async function runAgentInSession(
   if (!prompt) {
     throw new SessionError("prompt must not be empty", 400);
   }
+  const authUser = getAuthUserById(db, ownerUserId);
+  if (!authUser) {
+    throw new SessionError("Authentication required", 401);
+  }
+  const sshUser = resolveSessionSshUser(authUser.github.login);
 
   const maxTurns = Math.min(
     20,
     Math.max(1, input.maxTurns ?? env.AGENT_MAX_TURNS),
   );
-  const secret = await getModalClient().secrets.fromObject({
-    ANTHROPIC_AUTH_TOKEN: authToken,
-    CLAUDE_CODE_OAUTH_TOKEN: authToken,
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+  const spawner = createModalClaudeSpawner({
+    providerSessionId: record.providerSessionId,
+    linuxUser: sshUser,
+    authToken,
+    timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
+    onStderrChunk(chunk) {
+      stderrChunks.push(chunk);
+    },
   });
+  const cwd = input.cwd?.trim() || record.workspacePath;
 
   try {
-    return await runCommand(
-      record.providerSessionId,
-      ["node", "--input-type=module", "-e", AGENT_RUNNER_SOURCE],
-      {
-        workdir: AGENT_SDK_WORKDIR,
-        pty: false,
-        timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
-        env: {
-          AGENT_PROMPT: prompt,
-          AGENT_CWD: input.cwd?.trim() || record.workspacePath,
-          AGENT_MAX_TURNS: String(maxTurns),
-        },
-        secrets: [secret],
+    for await (const message of query({
+      prompt,
+      options: {
+        cwd,
+        maxTurns,
+        permissionMode: "bypassPermissions",
+        allowDangerouslySkipPermissions: true,
+        spawnClaudeCodeProcess: spawner.spawnClaudeCodeProcess,
       },
-    );
+    })) {
+      stdoutChunks.push(`${JSON.stringify(message)}\n`);
+    }
+
+    return {
+      stdout: stdoutChunks.join(""),
+      stderr: stderrChunks.join(""),
+      exitCode: 0,
+    };
   } catch (error) {
-    if (error instanceof NotFoundError) {
+    if (spawner.state.sessionMissing) {
       updateSession(db, ownerUserId, id, { status: "terminated" });
       throw new SessionError("Session no longer exists", 409);
     }
 
-    throw error;
+    const errorMessage = getAgentErrorMessage(error);
+    if (!stderrChunks.some((chunk) => chunk.includes(errorMessage))) {
+      stderrChunks.push(
+        `${errorMessage}${errorMessage.endsWith("\n") ? "" : "\n"}`,
+      );
+    }
+
+    return {
+      stdout: stdoutChunks.join(""),
+      stderr: stderrChunks.join(""),
+      exitCode: getAgentErrorExitCode(error),
+    };
   }
 }

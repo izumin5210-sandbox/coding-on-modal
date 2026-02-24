@@ -19,6 +19,7 @@
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
 - `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle, Session bootstrap (repository clone, GitHub credential initialization, SSH user/key bootstrap), SSH connection metadata resolution, and execution logic.
+- `apps/manager-app/src/server/sessions/claude-remote-spawn.ts`: Adapter that bridges Claude Agent SDK `spawnClaudeCodeProcess` to Modal Session `sandbox.exec()` and runs Claude Code as the Session SSH Linux user.
 - `apps/manager-app/src/server/sessions/store.ts`: Drizzle-based persistence access with injected `db`.
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
