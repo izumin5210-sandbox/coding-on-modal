@@ -40,7 +40,7 @@ function formatTime(iso: string): string {
 
 export default function Home() {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [claudeTokenConfigured, setClaudeTokenConfigured] = useState(false);
+  const [claudeApiKeyConfigured, setClaudeApiKeyConfigured] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
 
@@ -65,10 +65,12 @@ export default function Home() {
   const [cwd, setCwd] = useState("/workspace/repo");
   const [execResult, setExecResult] = useState<SessionExecResult | null>(null);
 
-  const [isClaudeTokenModalOpen, setIsClaudeTokenModalOpen] = useState(false);
-  const [claudeTokenInput, setClaudeTokenInput] = useState("");
-  const [claudeTokenSaving, setClaudeTokenSaving] = useState(false);
-  const [claudeTokenError, setClaudeTokenError] = useState<string | null>(null);
+  const [isClaudeApiKeyModalOpen, setIsClaudeApiKeyModalOpen] = useState(false);
+  const [claudeApiKeyInput, setClaudeApiKeyInput] = useState("");
+  const [claudeApiKeySaving, setClaudeApiKeySaving] = useState(false);
+  const [claudeApiKeyError, setClaudeApiKeyError] = useState<string | null>(
+    null,
+  );
   const [pendingCreatePayload, setPendingCreatePayload] =
     useState<CreateSessionPayload | null>(null);
 
@@ -79,14 +81,14 @@ export default function Home() {
 
   const onUnauthorized = useCallback(() => {
     setUser(null);
-    setClaudeTokenConfigured(false);
+    setClaudeApiKeyConfigured(false);
     setSessions([]);
     setSelectedId(null);
     setExecResult(null);
     setPendingCreatePayload(null);
-    setIsClaudeTokenModalOpen(false);
-    setClaudeTokenInput("");
-    setClaudeTokenError(null);
+    setIsClaudeApiKeyModalOpen(false);
+    setClaudeApiKeyInput("");
+    setClaudeApiKeyError(null);
     setMessage(null);
     setError("Authentication required. Please sign in with GitHub.");
   }, []);
@@ -110,7 +112,7 @@ export default function Home() {
       const response = await fetch("/api/me", { cache: "no-store" });
       if (response.status === 401) {
         setUser(null);
-        setClaudeTokenConfigured(false);
+        setClaudeApiKeyConfigured(false);
         return;
       }
       if (!response.ok) {
@@ -119,13 +121,13 @@ export default function Home() {
 
       const body = (await response.json()) as MeResponse;
       setUser(body.user);
-      setClaudeTokenConfigured(body.claudeTokenConfigured);
+      setClaudeApiKeyConfigured(body.claudeApiKeyConfigured);
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : String(loadError),
       );
       setUser(null);
-      setClaudeTokenConfigured(false);
+      setClaudeApiKeyConfigured(false);
     } finally {
       setAuthLoading(false);
     }
@@ -247,25 +249,25 @@ export default function Home() {
       repoRef: createForm.repoRef.trim() || undefined,
     };
 
-    if (!claudeTokenConfigured) {
+    if (!claudeApiKeyConfigured) {
       setPendingCreatePayload(payload);
-      setClaudeTokenError(null);
-      setIsClaudeTokenModalOpen(true);
+      setClaudeApiKeyError(null);
+      setIsClaudeApiKeyModalOpen(true);
       return;
     }
 
     await submitCreateSession(payload);
   }
 
-  async function saveClaudeToken() {
-    const token = claudeTokenInput.trim();
-    if (!token) {
-      setClaudeTokenError("Claude token is required.");
+  async function saveClaudeApiKey() {
+    const apiKey = claudeApiKeyInput.trim();
+    if (!apiKey) {
+      setClaudeApiKeyError("Claude API key is required.");
       return;
     }
 
-    setClaudeTokenSaving(true);
-    setClaudeTokenError(null);
+    setClaudeApiKeySaving(true);
+    setClaudeApiKeyError(null);
     setError(null);
     setMessage(null);
 
@@ -273,14 +275,14 @@ export default function Home() {
       const response = await fetch("/api/claude-token", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ apiKey }),
       });
       await ensureResponseOk(response);
 
-      setClaudeTokenConfigured(true);
-      setClaudeTokenInput("");
-      setIsClaudeTokenModalOpen(false);
-      setMessage("Claude token saved.");
+      setClaudeApiKeyConfigured(true);
+      setClaudeApiKeyInput("");
+      setIsClaudeApiKeyModalOpen(false);
+      setMessage("Claude API key saved.");
 
       if (pendingCreatePayload) {
         const payload = pendingCreatePayload;
@@ -288,11 +290,11 @@ export default function Home() {
         await submitCreateSession(payload);
       }
     } catch (saveError) {
-      setClaudeTokenError(
+      setClaudeApiKeyError(
         saveError instanceof Error ? saveError.message : String(saveError),
       );
     } finally {
-      setClaudeTokenSaving(false);
+      setClaudeApiKeySaving(false);
     }
   }
 
@@ -443,14 +445,14 @@ export default function Home() {
         throw new Error(await parseError(response));
       }
       setUser(null);
-      setClaudeTokenConfigured(false);
+      setClaudeApiKeyConfigured(false);
       setSessions([]);
       setSelectedId(null);
       setExecResult(null);
       setPendingCreatePayload(null);
-      setIsClaudeTokenModalOpen(false);
-      setClaudeTokenInput("");
-      setClaudeTokenError(null);
+      setIsClaudeApiKeyModalOpen(false);
+      setClaudeApiKeyInput("");
+      setClaudeApiKeyError(null);
       setMessage("Signed out.");
     } catch (logoutError) {
       setError(
@@ -483,7 +485,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!user) {
-      setClaudeTokenConfigured(false);
+      setClaudeApiKeyConfigured(false);
       setSessions([]);
       setSelectedId(null);
       return;
@@ -567,7 +569,8 @@ export default function Home() {
                 <span className="font-medium">{user.github.login}</span>
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Claude token: {claudeTokenConfigured ? "configured" : "not set"}
+                Claude API key:{" "}
+                {claudeApiKeyConfigured ? "configured" : "not set"}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -575,13 +578,13 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   setPendingCreatePayload(null);
-                  setClaudeTokenError(null);
-                  setIsClaudeTokenModalOpen(true);
+                  setClaudeApiKeyError(null);
+                  setIsClaudeApiKeyModalOpen(true);
                 }}
-                disabled={busy !== null || claudeTokenSaving}
+                disabled={busy !== null || claudeApiKeySaving}
                 className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Claude token settings
+                Claude API key settings
               </button>
               <button
                 type="button"
@@ -927,16 +930,16 @@ export default function Home() {
         </section>
       </main>
 
-      {isClaudeTokenModalOpen ? (
+      {isClaudeApiKeyModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
-            <h2 className="text-lg font-semibold">Configure Claude token</h2>
+            <h2 className="text-lg font-semibold">Configure Claude API key</h2>
             <p className="mt-2 text-sm text-slate-600">
-              Save your Claude token to run agent tasks in your Sessions.
+              Save your Claude API key to run agent tasks in your Sessions.
             </p>
             {pendingCreatePayload ? (
               <p className="mt-2 text-xs text-slate-500">
-                Session creation will resume after saving this token.
+                Session creation will resume after saving this API key.
               </p>
             ) : null}
 
@@ -944,40 +947,40 @@ export default function Home() {
               className="mt-4 space-y-3"
               onSubmit={(event) => {
                 event.preventDefault();
-                void saveClaudeToken();
+                void saveClaudeApiKey();
               }}
             >
               <input
                 type="password"
-                value={claudeTokenInput}
-                onChange={(event) => setClaudeTokenInput(event.target.value)}
+                value={claudeApiKeyInput}
+                onChange={(event) => setClaudeApiKeyInput(event.target.value)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500"
-                placeholder="Claude token"
+                placeholder="Claude API key"
               />
-              {claudeTokenError ? (
+              {claudeApiKeyError ? (
                 <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {claudeTokenError}
+                  {claudeApiKeyError}
                 </p>
               ) : null}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setIsClaudeTokenModalOpen(false);
+                    setIsClaudeApiKeyModalOpen(false);
                     setPendingCreatePayload(null);
-                    setClaudeTokenError(null);
+                    setClaudeApiKeyError(null);
                   }}
-                  disabled={claudeTokenSaving}
+                  disabled={claudeApiKeySaving}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={claudeTokenSaving}
+                  disabled={claudeApiKeySaving}
                   className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {claudeTokenSaving ? "Saving..." : "Save token"}
+                  {claudeApiKeySaving ? "Saving..." : "Save API key"}
                 </button>
               </div>
             </form>

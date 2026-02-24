@@ -299,9 +299,12 @@ export async function createSession(
     );
   }
   const githubToken = decryptToken(encryptedGithubToken);
-  const encryptedClaudeToken = getEncryptedClaudeTokenByUserId(db, ownerUserId);
-  const claudeToken = encryptedClaudeToken
-    ? decryptToken(encryptedClaudeToken)
+  const encryptedClaudeApiKey = getEncryptedClaudeTokenByUserId(
+    db,
+    ownerUserId,
+  );
+  const claudeApiKey = encryptedClaudeApiKey
+    ? decryptToken(encryptedClaudeApiKey)
     : "";
 
   const modal = getModalClient();
@@ -319,7 +322,7 @@ export async function createSession(
   try {
     const bootstrapSecret = await modal.secrets.fromObject({
       SESSION_GITHUB_TOKEN: githubToken,
-      SESSION_CLAUDE_AUTH_TOKEN: claudeToken,
+      SESSION_CLAUDE_API_KEY: claudeApiKey,
     });
     const cloneResult = await runCommand(
       providerSession.sandboxId,
@@ -344,11 +347,10 @@ fi
 session_env_dir="$home_dir/.config"
 session_env_file="$session_env_dir/session-env.sh"
 install -d -m 700 -o "$SSH_USER" -g "$SSH_USER" "$session_env_dir"
-if [ -n "\${SESSION_CLAUDE_AUTH_TOKEN:-}" ]; then
-  escaped_claude_token="$(printf '%s' "$SESSION_CLAUDE_AUTH_TOKEN" | sed "s/'/'\\\\''/g")"
+if [ -n "\${SESSION_CLAUDE_API_KEY:-}" ]; then
+  escaped_claude_api_key="$(printf '%s' "$SESSION_CLAUDE_API_KEY" | sed "s/'/'\\\\''/g")"
   {
-    printf "export ANTHROPIC_AUTH_TOKEN='%s'\n" "$escaped_claude_token"
-    printf "export CLAUDE_CODE_OAUTH_TOKEN='%s'\n" "$escaped_claude_token"
+    printf "export ANTHROPIC_API_KEY='%s'\n" "$escaped_claude_api_key"
   } > "$session_env_file"
   chown "$SSH_USER:$SSH_USER" "$session_env_file"
   chmod 600 "$session_env_file"
@@ -564,14 +566,17 @@ export async function runAgentInSession(
   input: AgentSessionInput,
 ): Promise<SessionExecResult> {
   const env = getEnv();
-  const encryptedClaudeToken = getEncryptedClaudeTokenByUserId(db, ownerUserId);
-  if (!encryptedClaudeToken) {
+  const encryptedClaudeApiKey = getEncryptedClaudeTokenByUserId(
+    db,
+    ownerUserId,
+  );
+  if (!encryptedClaudeApiKey) {
     throw new SessionError(
-      "Claude token is not configured. Please save it before running the agent.",
+      "Claude API key is not configured. Please save it before running the agent.",
       400,
     );
   }
-  const authToken = decryptToken(encryptedClaudeToken);
+  const apiKey = decryptToken(encryptedClaudeApiKey);
 
   const record = await mustGetSession(db, ownerUserId, id);
   if (record.status === "terminated") {
@@ -597,7 +602,7 @@ export async function runAgentInSession(
   const spawner = createModalClaudeSpawner({
     providerSessionId: record.providerSessionId,
     linuxUser: sshUser,
-    authToken,
+    apiKey,
     timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
     onStderrChunk(chunk) {
       stderrChunks.push(chunk);

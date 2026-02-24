@@ -9,18 +9,34 @@ import { upsertClaudeCredentialByUserId } from "@/server/users/store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const saveClaudeTokenSchema = z.object({
-  token: z.string().trim().min(1, "token is required"),
-});
+const saveClaudeApiKeySchema = z
+  .object({
+    apiKey: z.string().trim().optional(),
+    token: z.string().trim().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.apiKey && value.apiKey.length > 0) || value.token) {
+      return;
+    }
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "apiKey is required",
+    });
+  });
 
 export async function POST(request: Request) {
   const db = getDb();
 
   try {
     const user = requireAuthenticatedUser(db, request);
-    const input = saveClaudeTokenSchema.parse(await request.json());
-    upsertClaudeCredentialByUserId(db, user.id, encryptToken(input.token));
-    return NextResponse.json({ claudeTokenConfigured: true });
+    const input = saveClaudeApiKeySchema.parse(await request.json());
+    const apiKey =
+      input.apiKey && input.apiKey.length > 0 ? input.apiKey : input.token;
+    if (!apiKey) {
+      return jsonError(400, "apiKey is required");
+    }
+    upsertClaudeCredentialByUserId(db, user.id, encryptToken(apiKey));
+    return NextResponse.json({ claudeApiKeyConfigured: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return jsonError(

@@ -16,7 +16,7 @@ type SpawnObserverState = {
 type CreateModalClaudeSpawnerParams = {
   providerSessionId: string;
   linuxUser: string;
-  authToken: string;
+  apiKey: string;
   timeoutMs: number;
   onStderrChunk?: (chunk: string) => void;
 };
@@ -36,7 +36,7 @@ type ModalClaudeSpawner = {
   state: SpawnObserverState;
 };
 
-const TOKEN_ENV_NAMES = ["ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
+const CLAUDE_AUTH_ENV_NAMES = ["ANTHROPIC_API_KEY"];
 const REMOTE_SDK_CLI_PATH =
   "/opt/claude-code-sdk/node_modules/@anthropic-ai/claude-agent-sdk/cli.js";
 
@@ -48,8 +48,7 @@ export function createModalClaudeSpawner(
     sessionMissing: false,
   };
   const secretPromise = modal.secrets.fromObject({
-    ANTHROPIC_AUTH_TOKEN: params.authToken,
-    CLAUDE_CODE_OAUTH_TOKEN: params.authToken,
+    ANTHROPIC_API_KEY: params.apiKey,
   });
 
   return {
@@ -141,7 +140,7 @@ class ModalClaudeSpawnedProcess extends EventEmitter implements SpawnedProcess {
       );
       const secret = await this.params.secretPromise;
       const execEnv = buildExecEnv(this.params.options.env, this.pidFilePath);
-      const preserveEnv = [...Object.keys(execEnv), ...TOKEN_ENV_NAMES];
+      const preserveEnv = [...Object.keys(execEnv), ...CLAUDE_AUTH_ENV_NAMES];
       const command = buildClaudeExecCommand({
         linuxUser: this.params.linuxUser,
         preserveEnv,
