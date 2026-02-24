@@ -17,6 +17,7 @@
 - Preinstall Claude Code CLI in the Session image and pin it to a known-good version (`2.1.29`) while disabling auto-update to avoid TUI regressions from newer releases; pin the manager-side Claude Agent SDK to the matching compatible version (`@anthropic-ai/claude-agent-sdk@0.2.29`) and keep a matching SDK package in the Session image only as the spawned Claude process entrypoint (`cli.js`) for remote execution.
 - In the future, enable the same agent execution foundation to be called from non-Web channels (for example, Slack).
 - Persist Claude Code chat transcripts server-side in SQLite as raw Claude Agent SDK `SDKMessage` JSON records, with UI-oriented shaping performed at read time.
+- Return Session chat messages from the API in a generalized `role + parts[] + metadata` schema (inspired by Vercel AI SDK `UIMessage`) instead of exposing Claude Agent SDK transport message shapes directly.
 - Support multi-turn Session chat continuity by resuming Claude Code conversations using Claude Agent SDK `query()` with stored SDK session IDs.
 
 ## Authentication Strategy (Current Phase)

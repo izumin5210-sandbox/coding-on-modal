@@ -3,8 +3,10 @@ import type {
   GetSessionChatResponse,
   SendSessionChatMessageInput,
   SendSessionChatMessageResponse,
+  SessionChatMessage,
+  SessionChatMessageMetadata,
+  SessionChatMessagePart,
   SessionChatRunSummary,
-  SessionChatUiMessage,
 } from "@/lib/session-chat-types";
 import { decryptToken } from "@/server/crypto/token";
 import type { AppDb } from "@/server/db";
@@ -41,6 +43,96 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function getString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function getBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function omitKeys(
+  record: Record<string, unknown>,
+  keys: string[],
+): Record<string, unknown> {
+  const entries = Object.entries(record).filter(([key]) => !keys.includes(key));
+  return Object.fromEntries(entries);
+}
+
+function compactMetadata(
+  metadata: SessionChatMessageMetadata,
+): SessionChatMessageMetadata | undefined {
+  const entries = Object.entries(metadata).filter(
+    ([, value]) => value !== undefined,
+  );
+  if (entries.length === 0) {
+    return undefined;
+  }
+  return Object.fromEntries(entries) as SessionChatMessageMetadata;
+}
+
+function mergeMetadata(
+  base: SessionChatMessageMetadata,
+  extra?: SessionChatMessageMetadata,
+): SessionChatMessageMetadata | undefined {
+  return compactMetadata({
+    ...base,
+    ...extra,
+  });
+}
+
+function createMessage(
+  envelope: SdkEnvelope,
+  role: SessionChatMessage["role"],
+  parts: SessionChatMessagePart[],
+  metadata?: SessionChatMessageMetadata,
+): SessionChatMessage {
+  return {
+    id: envelope.id,
+    role,
+    parts:
+      parts.length > 0
+        ? parts
+        : [
+            {
+              type: "unknown",
+              rawType:
+                getString(
+                  (envelope.message as unknown as Record<string, unknown>).type,
+                ) ?? "unknown",
+              rawSubtype: getString(
+                (envelope.message as unknown as Record<string, unknown>)
+                  .subtype,
+              ),
+              data: envelope.message,
+            },
+          ],
+    createdAt: envelope.createdAt,
+    updatedAt: envelope.updatedAt,
+    metadata,
+  };
+}
+
+function buildProviderMetadata(
+  envelope: SdkEnvelope,
+): SessionChatMessageMetadata {
+  const raw = envelope.message as unknown as Record<string, unknown>;
+  return {
+    provider: "claude-agent-sdk",
+    providerMessageType: getString(raw.type),
+    providerSubtype: getString(raw.subtype),
+    providerUuid: getString(raw.uuid),
+    providerSessionId: getString(raw.session_id),
+    rawStoredMessageId: envelope.id,
+    parentToolUseId:
+      "parent_tool_use_id" in raw
+        ? (getString(raw.parent_tool_use_id) ?? null)
+        : undefined,
+    isSynthetic: "isSynthetic" in raw ? getBoolean(raw.isSynthetic) : undefined,
+    isReplay: raw.isReplay === true,
+  };
+}
+
 function toUiThread(thread: ClaudeChatThreadStoreRecord) {
   return thread;
 }
@@ -58,10 +150,10 @@ function resolveSessionSshUser(githubLogin: string): string {
 
 function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   envelopes: SdkEnvelope[];
-  invalidUiMessages: SessionChatUiMessage[];
+  invalidMessages: SessionChatMessage[];
 } {
   const envelopes: SdkEnvelope[] = [];
-  const invalidUiMessages: SessionChatUiMessage[] = [];
+  const invalidMessages: SessionChatMessage[] = [];
 
   for (const row of rows) {
     try {
@@ -73,161 +165,356 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
         message: parsed,
       });
     } catch (error) {
-      invalidUiMessages.push({
+      invalidMessages.push({
         id: row.id,
         role: "system",
-        kind: "error",
-        content: `Invalid stored SDK message JSON: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        parts: [
+          {
+            type: "error",
+            code: "invalid_json",
+            message: `Invalid stored SDK message JSON: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
-        rawType: "invalid_json",
+        metadata: {
+          provider: "claude-agent-sdk",
+          rawStoredMessageId: row.id,
+          visibility: "trace",
+          status: "error",
+          label: "Stored Message Parse Error",
+        },
       });
     }
   }
 
-  return { envelopes, invalidUiMessages };
+  return { envelopes, invalidMessages };
 }
 
-function extractTextFromContent(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (!Array.isArray(value)) {
-    return "";
+function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
+  if (!Array.isArray(blocks)) {
+    return [];
   }
 
-  const parts: string[] = [];
-  for (const item of value) {
-    if (!isRecord(item)) {
+  const parts: SessionChatMessagePart[] = [];
+
+  for (const block of blocks) {
+    if (!isRecord(block)) {
+      parts.push({ type: "unknown", rawType: "non_object_block", data: block });
       continue;
     }
-    if (item.type === "text" && typeof item.text === "string") {
-      parts.push(item.text);
-      continue;
-    }
-    if (typeof item.content === "string") {
-      parts.push(item.content);
-      continue;
-    }
-    if (Array.isArray(item.content)) {
-      const nested = extractTextFromContent(item.content);
-      if (nested) {
-        parts.push(nested);
+
+    const blockType = getString(block.type) ?? "unknown";
+
+    if (blockType === "text") {
+      const text = getString(block.text) ?? getString(block.content);
+      if (text?.trim()) {
+        parts.push({ type: "text", text: text.trim() });
       }
+      continue;
     }
-  }
 
-  return parts.join("\n\n").trim();
-}
-
-function extractUserMessageText(message: SDKMessage): string {
-  if (message.type !== "user") {
-    return "";
-  }
-  const body = message.message;
-  if (typeof body === "string") {
-    return body.trim();
-  }
-  if (isRecord(body)) {
-    if (typeof body.content === "string") {
-      return body.content.trim();
+    if (blockType === "tool_use") {
+      const toolUseId =
+        getString(block.id) ?? getString(block.tool_use_id) ?? "unknown";
+      parts.push({
+        type: "tool-call",
+        toolUseId,
+        toolName: getString(block.name),
+        input: block.input,
+      });
+      continue;
     }
-    return extractTextFromContent(body.content);
+
+    if (blockType === "tool_result") {
+      parts.push({
+        type: "tool-result",
+        toolUseId: getString(block.tool_use_id),
+        result: "content" in block ? block.content : block,
+        isError: getBoolean(block.is_error),
+      });
+      continue;
+    }
+
+    parts.push({
+      type: "unknown",
+      rawType: blockType,
+      data: block,
+    });
   }
-  return "";
+
+  return parts;
 }
 
-function extractAssistantMessageText(message: SDKMessage): string {
-  if (message.type !== "assistant") {
-    return "";
+function normalizeMessageParamToParts(
+  messageParam: unknown,
+): SessionChatMessagePart[] {
+  if (typeof messageParam === "string") {
+    const text = messageParam.trim();
+    return text ? [{ type: "text", text }] : [];
   }
-  return extractTextFromContent(message.message.content);
+
+  if (!isRecord(messageParam)) {
+    return [
+      { type: "unknown", rawType: "user_message_param", data: messageParam },
+    ];
+  }
+
+  if (typeof messageParam.content === "string") {
+    const text = messageParam.content.trim();
+    return text ? [{ type: "text", text }] : [];
+  }
+
+  if (Array.isArray(messageParam.content)) {
+    return normalizeContentBlocks(messageParam.content);
+  }
+
+  return [
+    { type: "unknown", rawType: "user_message_param", data: messageParam },
+  ];
 }
 
-function toUiMessageFromSdk(
-  envelope: SdkEnvelope,
-): SessionChatUiMessage | null {
-  const { id, createdAt, updatedAt, message } = envelope;
+function buildResultSummaryText(
+  message: Extract<SDKMessage, { type: "result" }>,
+): string {
+  if (message.subtype === "success") {
+    return message.result || "Claude finished successfully.";
+  }
+  return message.errors.join("\n") || "Claude finished with an error.";
+}
+
+function statusPartFromRecord(
+  subtype: string,
+  record: Record<string, unknown>,
+): SessionChatMessagePart {
+  return {
+    type: "status",
+    subtype,
+    data: omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
+  };
+}
+
+function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
+  const message = envelope.message;
+  const baseMetadata = buildProviderMetadata(envelope);
 
   if (message.type === "user") {
-    const text = extractUserMessageText(message);
-    if (!text) {
-      return null;
+    const parts = normalizeMessageParamToParts(message.message);
+    if (message.tool_use_result !== undefined) {
+      parts.unshift({
+        type: "tool-result",
+        toolUseId: message.parent_tool_use_id ?? undefined,
+        result: message.tool_use_result,
+      });
     }
-    return {
-      id,
-      role: "user",
-      kind: "message",
-      content: text,
-      createdAt,
-      updatedAt,
-      rawType: "user",
-    };
+
+    const isSyntheticLike =
+      message.isSynthetic === true ||
+      message.parent_tool_use_id !== null ||
+      message.tool_use_result !== undefined;
+
+    const role = isSyntheticLike ? "assistant" : "user";
+    return createMessage(
+      envelope,
+      role,
+      parts,
+      mergeMetadata(baseMetadata, {
+        visibility: isSyntheticLike ? "trace" : "default",
+        label: isSyntheticLike
+          ? "Tool Result / Synthetic User Message"
+          : undefined,
+      }),
+    );
   }
 
   if (message.type === "assistant") {
-    const text = extractAssistantMessageText(message);
-    if (!text) {
-      return null;
+    const parts = normalizeContentBlocks(message.message.content);
+    if (message.error) {
+      parts.push({
+        type: "error",
+        code: message.error,
+        message: `Assistant message error: ${message.error}`,
+      });
     }
-    return {
-      id,
-      role: "assistant",
-      kind: "message",
-      content: text,
-      createdAt,
-      updatedAt,
-      rawType: "assistant",
-    };
+    return createMessage(
+      envelope,
+      "assistant",
+      parts,
+      mergeMetadata(baseMetadata, {
+        status: message.error ? "error" : undefined,
+      }),
+    );
+  }
+
+  if (message.type === "tool_progress") {
+    return createMessage(
+      envelope,
+      "assistant",
+      [
+        {
+          type: "tool-progress",
+          toolUseId: message.tool_use_id,
+          toolName: message.tool_name,
+          elapsedSeconds: message.elapsed_time_seconds,
+        },
+      ],
+      mergeMetadata(baseMetadata, {
+        visibility: "trace",
+        status: "in-progress",
+        label: "Tool Progress",
+      }),
+    );
   }
 
   if (message.type === "tool_use_summary") {
-    return {
-      id,
-      role: "system",
-      kind: "tool_summary",
-      content: message.summary,
-      createdAt,
-      updatedAt,
-      rawType: "tool_use_summary",
-    };
+    return createMessage(
+      envelope,
+      "assistant",
+      [
+        {
+          type: "tool-summary",
+          summary: message.summary,
+          precedingToolUseIds: message.preceding_tool_use_ids,
+        },
+      ],
+      mergeMetadata(baseMetadata, {
+        visibility: "trace",
+        label: "Tool Summary",
+      }),
+    );
   }
 
   if (message.type === "result") {
-    const isError = Boolean(message.is_error);
-    const content =
-      message.subtype === "success"
-        ? message.result || "Claude finished successfully."
-        : message.errors.join("\n") || "Claude finished with an error.";
-    const metadata: Record<string, unknown> = {
-      isError,
-      subtype: message.subtype,
-      durationMs: message.duration_ms,
-      durationApiMs: message.duration_api_ms,
-      numTurns: message.num_turns,
-      totalCostUsd: message.total_cost_usd,
-    };
-    return {
-      id,
-      role: "system",
-      kind: isError ? "error" : "result",
-      content,
-      createdAt,
-      updatedAt,
-      rawType: "result",
-      rawSubtype: message.subtype,
-      metadata,
-    };
+    return createMessage(
+      envelope,
+      "system",
+      [
+        {
+          type: "result",
+          subtype: message.subtype,
+          isError: message.is_error,
+          summaryText: buildResultSummaryText(message),
+          metrics: {
+            durationMs: message.duration_ms,
+            durationApiMs: message.duration_api_ms,
+            numTurns: message.num_turns,
+            totalCostUsd: message.total_cost_usd,
+          },
+        },
+      ],
+      mergeMetadata(baseMetadata, {
+        status: message.is_error ? "error" : "done",
+        label: "Run Result",
+      }),
+    );
   }
 
-  return null;
+  if (message.type === "auth_status") {
+    return createMessage(
+      envelope,
+      "system",
+      [
+        {
+          type: "status",
+          subtype: "auth_status",
+          data: {
+            isAuthenticating: message.isAuthenticating,
+            output: message.output,
+            error: message.error,
+          },
+        },
+      ],
+      mergeMetadata(baseMetadata, {
+        visibility: "trace",
+        label: "Auth Status",
+      }),
+    );
+  }
+
+  if (message.type === "stream_event") {
+    const eventType = isRecord(message.event)
+      ? getString(message.event.type)
+      : undefined;
+    return createMessage(
+      envelope,
+      "assistant",
+      [
+        {
+          type: "stream-event",
+          eventType,
+          data: message.event,
+        },
+      ],
+      mergeMetadata(baseMetadata, {
+        visibility: "trace",
+        label: "Stream Event",
+      }),
+    );
+  }
+
+  if (message.type === "system") {
+    if (message.subtype === "files_persisted") {
+      return createMessage(
+        envelope,
+        "system",
+        [
+          {
+            type: "file-batch",
+            files: message.files.map((file) => ({
+              filename: file.filename,
+              fileId: file.file_id,
+            })),
+            failed: message.failed.map((file) => ({
+              filename: file.filename,
+              error: file.error,
+            })),
+            processedAt: message.processed_at,
+          },
+        ],
+        mergeMetadata(baseMetadata, {
+          visibility: "trace",
+          label: "Files Persisted",
+        }),
+      );
+    }
+
+    return createMessage(
+      envelope,
+      "system",
+      [
+        statusPartFromRecord(
+          message.subtype,
+          message as unknown as Record<string, unknown>,
+        ),
+      ],
+      mergeMetadata(baseMetadata, {
+        visibility: "trace",
+        label: `System ${message.subtype}`,
+      }),
+    );
+  }
+
+  return createMessage(
+    envelope,
+    "system",
+    [
+      {
+        type: "unknown",
+        rawType: (message as unknown as { type?: string }).type ?? "unknown",
+        rawSubtype: (message as unknown as { subtype?: string }).subtype,
+        data: message,
+      },
+    ],
+    mergeMetadata(baseMetadata, {
+      visibility: "trace",
+      label: "Unknown SDK Message",
+    }),
+  );
 }
 
-function sortUiMessages(
-  messages: SessionChatUiMessage[],
-): SessionChatUiMessage[] {
+function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
   return [...messages].sort((a, b) => {
     if (a.createdAt === b.createdAt) {
       return a.id.localeCompare(b.id);
@@ -236,14 +523,14 @@ function sortUiMessages(
   });
 }
 
-function toUiMessages(
+function toApiMessages(
   rows: ClaudeChatRawMessageRecord[],
-): SessionChatUiMessage[] {
-  const { envelopes, invalidUiMessages } = parseStoredSdkMessages(rows);
-  const uiMessages = envelopes
-    .map((envelope) => toUiMessageFromSdk(envelope))
-    .filter((message): message is SessionChatUiMessage => message !== null);
-  return sortUiMessages([...uiMessages, ...invalidUiMessages]);
+): SessionChatMessage[] {
+  const { envelopes, invalidMessages } = parseStoredSdkMessages(rows);
+  const normalized = envelopes.map((envelope) =>
+    normalizeSdkEnvelope(envelope),
+  );
+  return sortMessages([...normalized, ...invalidMessages]);
 }
 
 function buildRunSummary(
@@ -315,7 +602,7 @@ export async function getSessionClaudeChat(
   return {
     session,
     thread: toUiThread(thread),
-    messages: toUiMessages(rawMessages),
+    messages: toApiMessages(rawMessages),
     rawCount: rawMessages.length,
   };
 }
@@ -441,7 +728,7 @@ export async function sendSessionClaudeChatMessage(
   }
 
   const session = await getSessionRecord(db, ownerUserId, sessionId);
-  const appendedMessages = toUiMessages(persistedRows);
+  const appendedMessages = toApiMessages(persistedRows);
 
   return {
     session,

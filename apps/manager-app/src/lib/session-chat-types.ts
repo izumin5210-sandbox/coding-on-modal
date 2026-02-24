@@ -1,23 +1,101 @@
 import type { SessionRecord } from "@/lib/session-types";
 
-export type SessionChatUiMessageRole = "user" | "assistant" | "system";
+export type SessionChatMessageRole = "user" | "assistant" | "system";
 
-export type SessionChatUiMessageKind =
-  | "message"
-  | "tool_summary"
-  | "result"
-  | "error";
+export type SessionChatMessageVisibility = "default" | "trace";
 
-export type SessionChatUiMessage = {
+export type SessionChatResultMetrics = {
+  durationMs?: number;
+  durationApiMs?: number;
+  numTurns?: number;
+  totalCostUsd?: number;
+};
+
+export type SessionChatMessagePart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | {
+      type: "tool-call";
+      toolUseId: string;
+      toolName?: string;
+      input?: unknown;
+    }
+  | {
+      type: "tool-result";
+      toolUseId?: string;
+      result?: unknown;
+      isError?: boolean;
+    }
+  | {
+      type: "tool-progress";
+      toolUseId: string;
+      toolName: string;
+      elapsedSeconds: number;
+    }
+  | {
+      type: "tool-summary";
+      summary: string;
+      precedingToolUseIds: string[];
+    }
+  | {
+      type: "result";
+      subtype: string;
+      isError: boolean;
+      summaryText: string;
+      metrics?: SessionChatResultMetrics;
+    }
+  | {
+      type: "status";
+      subtype: string;
+      data: Record<string, unknown>;
+    }
+  | {
+      type: "file-batch";
+      files: { filename: string; fileId: string }[];
+      failed: { filename: string; error: string }[];
+      processedAt?: string;
+    }
+  | {
+      type: "stream-event";
+      eventType?: string;
+      data: unknown;
+    }
+  | {
+      type: "error";
+      message: string;
+      code?: string;
+    }
+  | {
+      type: "unknown";
+      rawType: string;
+      rawSubtype?: string;
+      data: unknown;
+    };
+
+export type SessionChatMessageMetadata = {
+  visibility?: SessionChatMessageVisibility;
+  status?: "in-progress" | "done" | "error";
+  label?: string;
+  isReplay?: boolean;
+  isSynthetic?: boolean;
+  parentToolUseId?: string | null;
+  provider?: "claude-agent-sdk";
+  providerSessionId?: string;
+  providerMessageType?: string;
+  providerSubtype?: string;
+  providerUuid?: string;
+  rawStoredMessageId?: string;
+};
+
+export type SessionChatMessage = {
   id: string;
-  role: SessionChatUiMessageRole;
-  kind: SessionChatUiMessageKind;
-  content: string;
+  role: SessionChatMessageRole;
+  parts: SessionChatMessagePart[];
   createdAt: string;
   updatedAt: string;
-  rawType?: string;
-  rawSubtype?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: SessionChatMessageMetadata;
 };
 
 export type SessionClaudeCodeThread = {
@@ -45,7 +123,7 @@ export type SessionChatRunSummary = {
 export type GetSessionChatResponse = {
   session: SessionRecord;
   thread: SessionClaudeCodeThread;
-  messages: SessionChatUiMessage[];
+  messages: SessionChatMessage[];
   rawCount: number;
 };
 
@@ -58,7 +136,7 @@ export type SendSessionChatMessageInput = {
 export type SendSessionChatMessageResponse = {
   session: SessionRecord;
   thread: SessionClaudeCodeThread;
-  appendedMessages: SessionChatUiMessage[];
+  appendedMessages: SessionChatMessage[];
   appendedRawCount: number;
   run: SessionChatRunSummary;
 };

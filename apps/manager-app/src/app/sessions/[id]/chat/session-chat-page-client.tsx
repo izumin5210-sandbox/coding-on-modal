@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   GetSessionChatResponse,
   SendSessionChatMessageResponse,
-  SessionChatUiMessage,
+  SessionChatMessage,
+  SessionChatMessagePart,
 } from "@/lib/session-chat-types";
 
 type ApiError = {
@@ -43,50 +44,261 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function MessageBubble({ message }: { message: SessionChatUiMessage }) {
-  if (message.role === "system") {
-    const toneClass =
-      message.kind === "error"
-        ? "border-rose-200 bg-rose-50 text-rose-900"
-        : "border-slate-200 bg-white/80 text-slate-800";
+function stringifyJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
 
+function JsonDetails({
+  label,
+  value,
+  defaultOpen = false,
+}: {
+  label: string;
+  value: unknown;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-lg border border-slate-200 bg-white/70 p-2"
+    >
+      <summary className="cursor-pointer text-xs font-medium text-slate-700">
+        {label}
+      </summary>
+      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded bg-slate-900 p-2 text-xs text-slate-100">
+        {stringifyJson(value)}
+      </pre>
+    </details>
+  );
+}
+
+function PartView({ part }: { part: SessionChatMessagePart }) {
+  switch (part.type) {
+    case "text":
+      return (
+        <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+          {part.text}
+        </pre>
+      );
+
+    case "tool-call":
+      return (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-sm text-indigo-950">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-indigo-700">
+            Tool Call
+          </div>
+          <p className="font-medium">{part.toolName ?? "(unknown tool)"}</p>
+          <p className="mt-1 text-xs text-indigo-700">ID: {part.toolUseId}</p>
+          {part.input !== undefined ? (
+            <div className="mt-2">
+              <JsonDetails label="Input" value={part.input} />
+            </div>
+          ) : null}
+        </div>
+      );
+
+    case "tool-result":
+      return (
+        <div
+          className={`rounded-xl border p-3 text-sm ${
+            part.isError
+              ? "border-rose-200 bg-rose-50/80 text-rose-950"
+              : "border-emerald-200 bg-emerald-50/80 text-emerald-950"
+          }`}
+        >
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em]">
+            Tool Result
+          </div>
+          {part.toolUseId ? (
+            <p className="mb-2 text-xs opacity-80">ID: {part.toolUseId}</p>
+          ) : null}
+          <JsonDetails label="Result" value={part.result} />
+        </div>
+      );
+
+    case "tool-progress":
+      return (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/80 px-3 py-2 text-sm text-sky-950">
+          <p className="font-medium">{part.toolName}</p>
+          <p className="text-xs text-sky-700">
+            {part.toolUseId} · {part.elapsedSeconds.toFixed(1)}s
+          </p>
+        </div>
+      );
+
+    case "tool-summary":
+      return (
+        <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm text-slate-900">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Tool Summary
+          </div>
+          <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+            {part.summary}
+          </pre>
+          {part.precedingToolUseIds.length > 0 ? (
+            <p className="mt-2 text-xs text-slate-500">
+              IDs: {part.precedingToolUseIds.join(", ")}
+            </p>
+          ) : null}
+        </div>
+      );
+
+    case "result":
+      return (
+        <div
+          className={`rounded-xl border p-3 text-sm ${
+            part.isError
+              ? "border-rose-200 bg-rose-50/80 text-rose-950"
+              : "border-slate-200 bg-white/80 text-slate-900"
+          }`}
+        >
+          <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+            <span className="font-semibold uppercase tracking-[0.12em]">
+              Run Result
+            </span>
+            <span>{part.subtype}</span>
+          </div>
+          <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+            {part.summaryText}
+          </pre>
+          {part.metrics ? (
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+              <p>Turns: {part.metrics.numTurns ?? "-"}</p>
+              <p>Cost: {part.metrics.totalCostUsd ?? "-"}</p>
+              <p>Duration: {part.metrics.durationMs ?? "-"}ms</p>
+              <p>API: {part.metrics.durationApiMs ?? "-"}ms</p>
+            </div>
+          ) : null}
+        </div>
+      );
+
+    case "status":
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Status · {part.subtype}
+          </div>
+          <JsonDetails label="Data" value={part.data} />
+        </div>
+      );
+
+    case "file-batch":
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Files Persisted
+          </div>
+          <p className="text-xs text-slate-600">
+            files: {part.files.length} · failed: {part.failed.length}
+            {part.processedAt ? ` · ${part.processedAt}` : ""}
+          </p>
+          <div className="mt-2 space-y-2">
+            <JsonDetails label="Files" value={part.files} />
+            {part.failed.length > 0 ? (
+              <JsonDetails label="Failed" value={part.failed} />
+            ) : null}
+          </div>
+        </div>
+      );
+
+    case "stream-event":
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Stream Event{part.eventType ? ` · ${part.eventType}` : ""}
+          </div>
+          <JsonDetails label="Event" value={part.data} />
+        </div>
+      );
+
+    case "error":
+      return (
+        <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-950">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">
+            Error{part.code ? ` · ${part.code}` : ""}
+          </div>
+          <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+            {part.message}
+          </pre>
+        </div>
+      );
+
+    case "unknown":
+      return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+            Unknown · {part.rawType}
+            {part.rawSubtype ? ` / ${part.rawSubtype}` : ""}
+          </div>
+          <JsonDetails label="Raw" value={part.data} />
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}
+
+function MessageCard({ message }: { message: SessionChatMessage }) {
+  const isUser = message.role === "user";
+  const isSystem = message.role === "system";
+  const isTrace = message.metadata?.visibility === "trace";
+
+  if (isSystem) {
     return (
-      <div className={`rounded-xl border px-3 py-2 text-sm ${toneClass}`}>
-        <div className="mb-1 flex items-center justify-between gap-3 text-xs text-slate-500">
+      <div
+        className={`rounded-xl border px-3 py-2 text-sm ${
+          isTrace
+            ? "border-slate-200 bg-slate-100/70 text-slate-800"
+            : "border-slate-200 bg-white/85 text-slate-900"
+        }`}
+      >
+        <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-500">
           <span>
-            {message.kind === "tool_summary"
-              ? "Tool summary"
-              : message.kind === "result"
-                ? "Run result"
-                : "System"}
+            {message.metadata?.label ??
+              message.metadata?.providerSubtype ??
+              message.metadata?.providerMessageType ??
+              "System"}
+            {isTrace ? " · trace" : ""}
           </span>
           <span>{formatTime(message.createdAt)}</span>
         </div>
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm">
-          {message.content}
-        </pre>
+        <div className="space-y-2">
+          {message.parts.map((part, index) => (
+            <PartView key={`${message.id}:${part.type}:${index}`} part={part} />
+          ))}
+        </div>
       </div>
     );
   }
 
-  const isUser = message.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+        className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
           isUser
             ? "bg-slate-900 text-white"
-            : "border border-slate-200 bg-white text-slate-900"
+            : isTrace
+              ? "border border-slate-200 bg-slate-100 text-slate-900"
+              : "border border-slate-200 bg-white text-slate-900"
         }`}
       >
         <div
-          className={`mb-1 text-[11px] ${isUser ? "text-slate-300" : "text-slate-500"}`}
+          className={`mb-2 text-[11px] ${isUser ? "text-slate-300" : "text-slate-500"}`}
         >
-          {isUser ? "You" : "Claude"} · {formatTime(message.createdAt)}
+          {isUser ? "You" : "Claude"}
+          {message.metadata?.label ? ` · ${message.metadata.label}` : ""}
+          {isTrace ? " · trace" : ""} · {formatTime(message.createdAt)}
         </div>
-        <pre className="whitespace-pre-wrap break-words font-sans text-sm">
-          {message.content}
-        </pre>
+        <div className="space-y-2">
+          {message.parts.map((part, index) => (
+            <PartView key={`${message.id}:${part.type}:${index}`} part={part} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -105,7 +317,9 @@ export default function SessionChatPageClient({
   const [prompt, setPrompt] = useState("");
   const [cwd, setCwd] = useState("");
   const [maxTurns, setMaxTurns] = useState("8");
+  const [showTrace, setShowTrace] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const lastAutoScrollCountRef = useRef(-1);
 
   const loadChat = useCallback(async () => {
     setLoading(true);
@@ -172,7 +386,7 @@ export default function SessionChatPageClient({
             session: body.session,
             thread: body.thread,
             messages: body.appendedMessages,
-            rawCount: body.appendedMessages.length,
+            rawCount: body.appendedRawCount,
           };
         }
         return {
@@ -203,14 +417,31 @@ export default function SessionChatPageClient({
     void loadChat();
   }, [loadChat]);
 
+  const visibleMessages = useMemo(() => {
+    const messages = data?.messages ?? [];
+    return showTrace
+      ? messages
+      : messages.filter((message) => message.metadata?.visibility !== "trace");
+  }, [data?.messages, showTrace]);
+
   useEffect(() => {
-    const messageCount = data?.messages.length ?? 0;
-    void messageCount;
+    if (lastAutoScrollCountRef.current === visibleMessages.length) {
+      return;
+    }
+    lastAutoScrollCountRef.current = visibleMessages.length;
     if (!scrollRef.current) {
       return;
     }
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [data?.messages.length]);
+  });
+
+  const traceCount = useMemo(
+    () =>
+      (data?.messages ?? []).filter(
+        (message) => message.metadata?.visibility === "trace",
+      ).length,
+    [data?.messages],
+  );
 
   const session = data?.session ?? null;
   const thread = data?.thread ?? null;
@@ -250,6 +481,17 @@ export default function SessionChatPageClient({
               </Link>
               <button
                 type="button"
+                onClick={() => setShowTrace((current) => !current)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                  showTrace
+                    ? "border-sky-300 bg-sky-50 text-sky-900"
+                    : "border-slate-300 bg-white text-slate-900"
+                }`}
+              >
+                {showTrace ? "Hide Trace" : "Show Trace"} ({traceCount})
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   void loadChat();
                 }}
@@ -283,13 +525,15 @@ export default function SessionChatPageClient({
                 <p className="text-sm text-slate-500">
                   Loading chat history...
                 </p>
-              ) : data && data.messages.length > 0 ? (
-                data.messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+              ) : visibleMessages.length > 0 ? (
+                visibleMessages.map((message) => (
+                  <MessageCard key={message.id} message={message} />
                 ))
               ) : (
                 <p className="text-sm text-slate-500">
-                  No chat messages yet. Send a prompt to start.
+                  {showTrace
+                    ? "No chat messages yet. Send a prompt to start."
+                    : "No visible chat messages yet. Send a prompt or enable Trace."}
                 </p>
               )}
             </div>

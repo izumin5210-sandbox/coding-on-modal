@@ -29,7 +29,7 @@
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
-- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions.
+- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions, including generalized message/parts schema for chat rendering.
 
 ## Responsibility Boundaries
 - UI layer: Input/output handling and user interaction orchestration.
