@@ -137,58 +137,6 @@ function buildAnswerValue(
   return multiSelect ? values : (values[0] ?? null);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function getStringValue(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function normalizeToolNameKey(toolName: string): string {
-  return toolName.toLowerCase().replaceAll(/[_-]/g, "");
-}
-
-function isExitPlanTool(toolName: string): boolean {
-  return normalizeToolNameKey(toolName) === "exitplanmode";
-}
-
-function buildExitPlanMarkdown(input: unknown): string | null {
-  if (!isRecord(input)) {
-    return null;
-  }
-
-  const explanation = getStringValue(input.explanation)?.trim();
-  const plan = Array.isArray(input.plan) ? input.plan : null;
-  if (!plan || plan.length === 0) {
-    return null;
-  }
-
-  const lines: string[] = [];
-  if (explanation) {
-    lines.push(explanation, "");
-  }
-
-  let itemCount = 0;
-  for (const [index, item] of plan.entries()) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const step =
-      getStringValue(item.step)?.trim() ||
-      getStringValue(item.activeForm)?.trim();
-    if (!step) {
-      continue;
-    }
-    const status = getStringValue(item.status)?.trim();
-    const prefix = `${index + 1}.`;
-    lines.push(status ? `${prefix} [${status}] ${step}` : `${prefix} ${step}`);
-    itemCount += 1;
-  }
-
-  return itemCount > 0 ? lines.join("\n") : null;
-}
-
 function mergeMessagesById(
   existing: SessionChatMessage[],
   appended: SessionChatMessage[],
@@ -644,24 +592,7 @@ function PendingUserInputPanel({
           <p className="text-sm text-slate-700">
             Claude is asking for approval before continuing this tool call.
           </p>
-          {isExitPlanTool(pending.toolName) ? (
-            (() => {
-              const markdown = buildExitPlanMarkdown(pending.input);
-              if (!markdown) {
-                return <JsonDetails label="Tool Input" value={pending.input} />;
-              }
-              return (
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-                    Proposed Plan
-                  </div>
-                  <MessageResponse>{markdown}</MessageResponse>
-                </div>
-              );
-            })()
-          ) : (
-            <JsonDetails label="Tool Input" value={pending.input} />
-          )}
+          <JsonDetails label="Tool Input" value={pending.input} />
           {pending.suggestions ? (
             <JsonDetails
               label="Permission Suggestions"
