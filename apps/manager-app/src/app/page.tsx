@@ -937,6 +937,17 @@ export default function Home() {
             <p className="mt-2 text-sm text-slate-600">
               Save your Claude API key to run agent tasks in your Sessions.
             </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Manage keys:{" "}
+              <a
+                href="https://platform.claude.com/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
+              >
+                https://platform.claude.com/settings/keys
+              </a>
+            </p>
             {pendingCreatePayload ? (
               <p className="mt-2 text-xs text-slate-500">
                 Session creation will resume after saving this API key.
