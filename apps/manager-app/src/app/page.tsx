@@ -58,10 +58,6 @@ export default function Home() {
   });
 
   const [command, setCommand] = useState("pwd && ls -la");
-  const [agentPrompt, setAgentPrompt] = useState(
-    "Summarize this repository and suggest one high-impact improvement.",
-  );
-  const [agentMaxTurns, setAgentMaxTurns] = useState("8");
   const [cwd, setCwd] = useState("/workspace/repo");
   const [execResult, setExecResult] = useState<SessionExecResult | null>(null);
 
@@ -353,44 +349,6 @@ export default function Home() {
         deleteError instanceof Error
           ? deleteError.message
           : String(deleteError),
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function runAgent(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedId) {
-      return;
-    }
-
-    setBusy("agent");
-    setError(null);
-
-    try {
-      const maxTurnsNumber = Number(agentMaxTurns);
-      const response = await fetch(`/api/sessions/${selectedId}/agent`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          prompt: agentPrompt,
-          cwd: cwd.trim() || undefined,
-          maxTurns: Number.isFinite(maxTurnsNumber)
-            ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
-            : undefined,
-        }),
-      });
-      await ensureResponseOk(response);
-
-      const body = (await response.json()) as ExecResponse;
-      setExecResult(body.result);
-      setMessage(`Agent finished with exit code ${body.result.exitCode}`);
-      await refreshSelected();
-    } catch (agentError) {
-      setError(
-        agentError instanceof Error ? agentError.message : String(agentError),
       );
     } finally {
       setBusy(null);
@@ -741,6 +699,12 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    <a
+                      href={`/sessions/${selectedSession.id}/chat`}
+                      className="rounded-lg border border-teal-300 bg-teal-50 px-3 py-1.5 text-xs font-medium text-teal-900 hover:bg-teal-100"
+                    >
+                      Open Chat
+                    </a>
                     <button
                       type="button"
                       onClick={refreshSelected}
@@ -845,36 +809,6 @@ export default function Home() {
                     </p>
                   )}
                 </div>
-
-                <form onSubmit={runAgent} className="mt-4 space-y-2">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">
-                    Run Claude Agent SDK
-                  </h3>
-                  <textarea
-                    value={agentPrompt}
-                    onChange={(event) => setAgentPrompt(event.target.value)}
-                    rows={4}
-                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none transition focus:border-slate-500"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      value={agentMaxTurns}
-                      onChange={(event) => setAgentMaxTurns(event.target.value)}
-                      className="w-28 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-500"
-                      placeholder="max turns"
-                      inputMode="numeric"
-                    />
-                    <button
-                      type="submit"
-                      disabled={
-                        busy !== null || selectedSession.status === "terminated"
-                      }
-                      className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {busy === "agent" ? "Running..." : "Run Agent"}
-                    </button>
-                  </div>
-                </form>
 
                 <form onSubmit={runCommand} className="mt-4 space-y-2">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">

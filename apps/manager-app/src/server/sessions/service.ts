@@ -15,6 +15,7 @@ import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
 import { getSessionImage } from "@/server/modal/image";
+import { deleteClaudeChatDataBySessionId } from "@/server/sessions/claude-chat-store";
 import { createModalClaudeSpawner } from "@/server/sessions/claude-remote-spawn";
 import {
   deleteSession,
@@ -504,6 +505,7 @@ export async function deleteSessionRecord(
   ownerUserId: string,
   id: string,
 ): Promise<boolean> {
+  deleteClaudeChatDataBySessionId(db, id);
   return deleteSession(db, ownerUserId, id);
 }
 
