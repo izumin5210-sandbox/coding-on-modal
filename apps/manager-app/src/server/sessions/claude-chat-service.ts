@@ -285,6 +285,30 @@ function buildResultSummaryText(
   return message.errors.join("\n") || "Claude finished with an error.";
 }
 
+function isCanonicalUserPromptMessage(message: SDKMessage): boolean {
+  return (
+    message.type === "user" &&
+    message.parent_tool_use_id === null &&
+    message.tool_use_result === undefined &&
+    message.isSynthetic !== true
+  );
+}
+
+function buildSubmittedUserPromptMessage(
+  prompt: string,
+  sdkSessionId: string,
+): SDKMessage {
+  return {
+    type: "user",
+    message: {
+      role: "user",
+      content: prompt,
+    },
+    parent_tool_use_id: null,
+    session_id: sdkSessionId,
+  } as SDKMessage;
+}
+
 function statusPartFromRecord(
   subtype: string,
   record: Record<string, unknown>,
@@ -705,11 +729,23 @@ export async function sendSessionClaudeChatMessage(
       error instanceof Error ? error.message : String(error),
     );
   } finally {
-    if (rawSdkMessages.length > 0) {
+    const sdkMessagesToPersist = rawSdkMessages.some((message) =>
+      isCanonicalUserPromptMessage(message),
+    )
+      ? rawSdkMessages
+      : [
+          buildSubmittedUserPromptMessage(
+            prompt,
+            claudeSdkSessionId ?? "unknown",
+          ),
+          ...rawSdkMessages,
+        ];
+
+    if (sdkMessagesToPersist.length > 0) {
       persistedRows = appendClaudeChatRawMessages(
         db,
         lockedThread.id,
-        rawSdkMessages.map((message) => JSON.stringify(message)),
+        sdkMessagesToPersist.map((message) => JSON.stringify(message)),
       );
     }
 
@@ -734,7 +770,7 @@ export async function sendSessionClaudeChatMessage(
     session,
     thread: toUiThread(persistedThread),
     appendedMessages,
-    appendedRawCount: rawSdkMessages.length,
+    appendedRawCount: persistedRows.length,
     run: runSummary,
   };
 }
