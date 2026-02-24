@@ -1,4 +1,10 @@
-import { index, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import type { SessionStatus } from "@/lib/session-types";
 
 export const users = sqliteTable("users", {
@@ -85,7 +91,56 @@ export const sessions = sqliteTable(
   ],
 );
 
+export const sessionClaudeCodeThreads = sqliteTable(
+  "session_claude_code_threads",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    claudeSdkSessionId: text("claude_sdk_session_id"),
+    cwd: text("cwd").notNull(),
+    maxTurns: integer("max_turns").notNull(),
+    isRunning: integer("is_running", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    lastError: text("last_error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("uidx_session_claude_code_threads_session_id").on(
+      table.sessionId,
+    ),
+    index("idx_session_claude_code_threads_updated_at").on(table.updatedAt),
+  ],
+);
+
+export const sessionClaudeCodeMessages = sqliteTable(
+  "session_claude_code_messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => sessionClaudeCodeThreads.id, { onDelete: "cascade" }),
+    sdkMessageJson: text("sdk_message_json").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_session_claude_code_messages_thread_id").on(table.threadId),
+    index("idx_session_claude_code_messages_thread_id_created_at").on(
+      table.threadId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export type SessionRow = typeof sessions.$inferSelect;
+export type SessionClaudeCodeThreadRow =
+  typeof sessionClaudeCodeThreads.$inferSelect;
+export type SessionClaudeCodeMessageRow =
+  typeof sessionClaudeCodeMessages.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type GithubAccountRow = typeof githubAccounts.$inferSelect;
 export type GithubCredentialRow = typeof githubCredentials.$inferSelect;

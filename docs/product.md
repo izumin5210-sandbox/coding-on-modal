@@ -8,6 +8,7 @@
 
 ## Current Product Scope
 - Session creation, listing, detail view, command execution, agent execution, termination, and deletion.
+- Session-scoped Web chat UI for agent interactions, with server-side chat history persistence per Session.
 - GitHub login is required, and each user can view/manage only their own Sessions.
 - Repository bootstrap supports both public and private GitHub repositories.
 - Session bootstrap configures GitHub HTTPS credentials inside each Session so subsequent git operations in the Session can access private GitHub repositories without re-authentication.
@@ -18,6 +19,7 @@
 ## Terminology
 - `Session`: The public term for one runnable development environment.
 - `Agent Run`: Prompt execution inside a session through Claude Code SDK.
+- `Session Chat`: The Web chat experience for iterative agent interaction within a Session.
 
 ## User Experience Principles
 - Developers can launch a remote development environment from the Web UI and perform implementation/debugging work with coding agents.

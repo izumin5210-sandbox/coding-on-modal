@@ -8,11 +8,16 @@
 
 ## Manager App Structure
 - `apps/manager-app/src/app/page.tsx`: Session list/create/execute and agent operation UI.
+- `apps/manager-app/src/app/sessions/[id]/chat/page.tsx`: Session chat page entrypoint.
+- `apps/manager-app/src/app/sessions/[id]/chat/session-chat-page-client.tsx`: Session chat UI client component.
+- `apps/manager-app/src/components/ai-elements/*`: Vercel AI Elements components used to compose chat UI primitives.
+- `apps/manager-app/src/components/ui/*`: shadcn/ui components generated as dependencies for AI Elements.
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
 - `apps/manager-app/src/app/api/me/route.ts`: Authenticated user profile endpoint.
 - `apps/manager-app/src/app/api/claude-token/route.ts`: Claude API key save endpoint for authenticated users.
 - `apps/manager-app/src/app/api/sessions/*`: Session CRUD / execute / agent execution APIs.
+- `apps/manager-app/src/app/api/sessions/[id]/chat/route.ts`: Session chat history fetch and chat send APIs.
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
@@ -21,9 +26,12 @@
 - `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle, Session bootstrap (repository clone, GitHub credential initialization, SSH user/key bootstrap), SSH connection metadata resolution, and execution logic.
 - `apps/manager-app/src/server/sessions/claude-remote-spawn.ts`: Adapter that bridges Claude Agent SDK `spawnClaudeCodeProcess` to Modal Session `sandbox.exec()` and runs Claude Code as the Session SSH Linux user.
 - `apps/manager-app/src/server/sessions/store.ts`: Drizzle-based persistence access with injected `db`.
+- `apps/manager-app/src/server/sessions/claude-chat-store.ts`: Claude Code chat thread/message persistence (raw SDKMessage JSON storage).
+- `apps/manager-app/src/server/sessions/claude-chat-service.ts`: Session chat orchestration, Claude execution, and UI message shaping.
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
+- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions, including generalized message/parts schema for chat rendering.
 
 ## Responsibility Boundaries
 - UI layer: Input/output handling and user interaction orchestration.
