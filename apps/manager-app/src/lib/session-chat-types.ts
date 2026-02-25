@@ -11,6 +11,45 @@ export type SessionChatResultMetrics = {
   totalCostUsd?: number;
 };
 
+export type SessionChatPendingUserInputQuestion = {
+  header: string;
+  question: string;
+  multiSelect: boolean;
+  options: {
+    label: string;
+    description: string;
+  }[];
+};
+
+export type SessionChatPendingUserInputAnswerValue = string | string[];
+
+export type SessionChatPendingUserInput =
+  | {
+      requestId: string;
+      toolName: string;
+      toolUseId: string;
+      kind: "ask-user-question";
+      createdAt: string;
+      input: Record<string, unknown>;
+      questions: SessionChatPendingUserInputQuestion[];
+      decisionReason?: string;
+      blockedPath?: string;
+      agentId?: string;
+      suggestions?: unknown[];
+    }
+  | {
+      requestId: string;
+      toolName: string;
+      toolUseId: string;
+      kind: "tool-approval";
+      createdAt: string;
+      input: Record<string, unknown>;
+      decisionReason?: string;
+      blockedPath?: string;
+      agentId?: string;
+      suggestions?: unknown[];
+    };
+
 export type SessionChatDynamicToolPart =
   | {
       type: "dynamic-tool";
@@ -181,6 +220,7 @@ export type GetSessionChatResponse = {
   thread: SessionClaudeCodeThread;
   messages: SessionChatMessage[];
   rawCount: number;
+  pendingUserInput?: SessionChatPendingUserInput | null;
 };
 
 export type SendSessionChatMessageInput = {
@@ -195,4 +235,5 @@ export type SendSessionChatMessageResponse = {
   appendedMessages: SessionChatMessage[];
   appendedRawCount: number;
   run: SessionChatRunSummary;
+  pendingUserInput?: SessionChatPendingUserInput | null;
 };
