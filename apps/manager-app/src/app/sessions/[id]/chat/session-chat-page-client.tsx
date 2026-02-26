@@ -718,8 +718,9 @@ export default function SessionChatPageClient({
           throw new Error(await parseError(response));
         }
 
-        // Workflow started asynchronously; rely on polling to get messages
+        // Workflow started asynchronously; refresh to pick up isRunning=true so polling begins
         setNotice("Run submitted. Waiting for results...");
+        await refreshChat({ silent: true });
       } catch (sendError) {
         const message =
           sendError instanceof Error ? sendError.message : String(sendError);
@@ -729,7 +730,7 @@ export default function SessionChatPageClient({
         setSending(false);
       }
     },
-    [cwd, data, maxTurns, sending, sessionId],
+    [cwd, data, maxTurns, refreshChat, sending, sessionId],
   );
 
   useEffect(() => {

@@ -235,7 +235,7 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
 
   const brokerUrl = await resolveBrokerUrl(params.providerSessionId);
   if (!brokerUrl) {
-    persistMessages(
+    await persistMessages(
       params.threadId,
       [],
       params.claudeSdkSessionId,
@@ -244,7 +244,7 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
       true,
       "Could not resolve broker tunnel URL",
     );
-    releaseThreadLock(params.threadId);
+    await releaseThreadLock(params.threadId);
     return;
   }
 
@@ -257,7 +257,7 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
     });
 
     // Persist messages from this segment
-    persistMessages(
+    await persistMessages(
       params.threadId,
       result.messages,
       result.claudeSdkSessionId ?? params.claudeSdkSessionId,
@@ -281,7 +281,7 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
       });
 
       // Persist messages from this segment
-      persistMessages(
+      await persistMessages(
         params.threadId,
         result.messages,
         result.claudeSdkSessionId ?? params.claudeSdkSessionId,
@@ -292,7 +292,7 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
       );
     }
   } finally {
-    releaseThreadLock(params.threadId);
+    await releaseThreadLock(params.threadId);
   }
 }
 
