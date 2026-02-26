@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NotFoundError, type Secret } from "modal";
+import { getBrokerScript } from "@/server/sessions/broker/broker-script";
 import type {
   CreateSessionInput,
   ExecSessionInput,
@@ -30,8 +31,88 @@ import {
 
 const WORKSPACE_PATH = "/workspace/repo";
 const SESSION_SSH_PORT = 22;
+export const SESSION_BROKER_PORT = 8765;
 const SESSION_SSH_TUNNELS_TIMEOUT_MS = 10_000;
+const BROKER_TUNNEL_TIMEOUT_MS = 10_000;
 const LINUX_USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
+
+async function startBrokerInSandbox(
+  providerSessionId: string,
+  linuxUser: string,
+  claudeApiKey: string,
+): Promise<void> {
+  const modal = getModalClient();
+  const brokerScript = getBrokerScript();
+
+  // Write broker script and start it as a background process under the linux user
+  const secret = await modal.secrets.fromObject({
+    ANTHROPIC_API_KEY: claudeApiKey,
+  });
+  const result = await runCommand(
+    providerSessionId,
+    [
+      "sh",
+      "-lc",
+      `
+set -eu
+mkdir -p /opt/broker
+cat > /opt/broker/broker.cjs << 'BROKER_SCRIPT_EOF'
+${brokerScript}
+BROKER_SCRIPT_EOF
+# Start broker as the linux user with SDK in NODE_PATH
+sudo -H -u "$BROKER_USER" env \
+  NODE_PATH=/opt/claude-code-sdk/node_modules \
+  ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+  SESSION_BROKER_PORT="${String(SESSION_BROKER_PORT)}" \
+  DISABLE_AUTOUPDATER=1 \
+  nohup node /opt/broker/broker.cjs > /tmp/broker.log 2>&1 &
+# Wait for broker to be ready
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -sf "http://127.0.0.1:${String(SESSION_BROKER_PORT)}/health" > /dev/null 2>&1; then
+    echo "Broker started successfully"
+    exit 0
+  fi
+  sleep 0.5
+done
+echo "Broker failed to start within timeout" >&2
+cat /tmp/broker.log >&2 || true
+exit 1
+      `,
+    ],
+    {
+      env: {
+        BROKER_USER: linuxUser,
+      },
+      secrets: [secret],
+    },
+  );
+
+  if (result.exitCode !== 0) {
+    console.error(
+      `[session] Broker startup failed: ${result.stderr || result.stdout}`,
+    );
+  }
+}
+
+/**
+ * Resolves the broker tunnel URL for a running sandbox.
+ * The tunnel URL is resolved on-demand via Modal API (not persisted).
+ */
+export async function resolveBrokerTunnelUrl(
+  providerSessionId: string,
+): Promise<string | null> {
+  try {
+    const sandbox = await getModalClient().sandboxes.fromId(providerSessionId);
+    const tunnels = await sandbox.tunnels(BROKER_TUNNEL_TIMEOUT_MS);
+    const brokerTunnel = tunnels[SESSION_BROKER_PORT];
+    if (!brokerTunnel) {
+      return null;
+    }
+    return brokerTunnel.url;
+  } catch {
+    return null;
+  }
+}
 
 export class SessionError extends Error {
   constructor(
@@ -311,7 +392,7 @@ export async function createSession(
     name,
     timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
     idleTimeoutMs: env.SANDBOX_IDLE_TIMEOUT_MINUTES * 60_000,
-    unencryptedPorts: [SESSION_SSH_PORT],
+    unencryptedPorts: [SESSION_SSH_PORT, SESSION_BROKER_PORT],
   });
 
   let status: SessionStatus = "running";
@@ -419,6 +500,13 @@ sudo -H -u "$SSH_USER" env -u GH_TOKEN -u GITHUB_TOKEN gh auth setup-git --hostn
         cloneResult.stderr ||
         cloneResult.stdout ||
         "Failed to clone repository";
+    } else {
+      // Start broker HTTP server in the sandbox
+      await startBrokerInSandbox(
+        providerSession.sandboxId,
+        sshUser,
+        claudeApiKey,
+      );
     }
   } catch (error) {
     status = "error";
