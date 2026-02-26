@@ -141,7 +141,71 @@ export type SessionClaudeCodeThreadRow =
   typeof sessionClaudeCodeThreads.$inferSelect;
 export type SessionClaudeCodeMessageRow =
   typeof sessionClaudeCodeMessages.$inferSelect;
+// ---------------------------------------------------------------------------
+// Slack integration
+// ---------------------------------------------------------------------------
+
+export const slackThreadSessions = sqliteTable(
+  "slack_thread_sessions",
+  {
+    id: text("id").primaryKey(),
+    slackTeamId: text("slack_team_id").notNull(),
+    slackChannelId: text("slack_channel_id").notNull(),
+    slackThreadTs: text("slack_thread_ts").notNull(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastPostedMessageId: text("last_posted_message_id"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("uidx_slack_thread_sessions_thread").on(
+      table.slackTeamId,
+      table.slackChannelId,
+      table.slackThreadTs,
+    ),
+    index("idx_slack_thread_sessions_session_id").on(table.sessionId),
+  ],
+);
+
+export const slackUserMappings = sqliteTable(
+  "slack_user_mappings",
+  {
+    id: text("id").primaryKey(),
+    slackUserId: text("slack_user_id").notNull(),
+    slackTeamId: text("slack_team_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("uidx_slack_user_mappings_slack_user").on(
+      table.slackUserId,
+      table.slackTeamId,
+    ),
+    index("idx_slack_user_mappings_user_id").on(table.userId),
+  ],
+);
+
+export const slackLinkTokens = sqliteTable("slack_link_tokens", {
+  id: text("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  slackUserId: text("slack_user_id").notNull(),
+  slackTeamId: text("slack_team_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export type UserRow = typeof users.$inferSelect;
 export type GithubAccountRow = typeof githubAccounts.$inferSelect;
 export type GithubCredentialRow = typeof githubCredentials.$inferSelect;
 export type ClaudeCredentialRow = typeof claudeCredentials.$inferSelect;
+export type SlackThreadSessionRow = typeof slackThreadSessions.$inferSelect;
+export type SlackUserMappingRow = typeof slackUserMappings.$inferSelect;
+export type SlackLinkTokenRow = typeof slackLinkTokens.$inferSelect;
