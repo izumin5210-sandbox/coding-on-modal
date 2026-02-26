@@ -37,7 +37,6 @@ import {
 } from "@/components/ai-elements/tool";
 import type {
   GetSessionChatResponse,
-  SendSessionChatMessageResponse,
   SessionChatMessage,
   SessionChatMessagePart,
   SessionChatPendingUserInput,
@@ -135,24 +134,6 @@ function buildAnswerValue(
     return null;
   }
   return multiSelect ? values : (values[0] ?? null);
-}
-
-function mergeMessagesById(
-  existing: SessionChatMessage[],
-  appended: SessionChatMessage[],
-): SessionChatMessage[] {
-  const seen = new Set<string>();
-  const merged: SessionChatMessage[] = [];
-
-  for (const message of [...existing, ...appended]) {
-    if (seen.has(message.id)) {
-      continue;
-    }
-    seen.add(message.id);
-    merged.push(message);
-  }
-
-  return merged;
 }
 
 function PendingToolCallBanner({
@@ -737,39 +718,8 @@ export default function SessionChatPageClient({
           throw new Error(await parseError(response));
         }
 
-        const body = (await response.json()) as SendSessionChatMessageResponse;
-        setData((current) => {
-          if (!current) {
-            return {
-              session: body.session,
-              thread: body.thread,
-              messages: body.appendedMessages,
-              rawCount: body.appendedRawCount,
-              pendingUserInput: body.pendingUserInput ?? null,
-            };
-          }
-          const currentIsAtLeastAsNew =
-            current.thread.updatedAt >= body.thread.updatedAt;
-          return {
-            session: body.session,
-            thread: body.thread,
-            messages: mergeMessagesById(
-              current.messages,
-              body.appendedMessages,
-            ),
-            rawCount: currentIsAtLeastAsNew
-              ? current.rawCount
-              : current.rawCount + body.appendedRawCount,
-            pendingUserInput: body.pendingUserInput ?? null,
-          };
-        });
-        if (body.run.isError) {
-          setNotice(
-            `Run finished with error${body.run.subtype ? ` (${body.run.subtype})` : ""}.`,
-          );
-        } else {
-          setNotice("Run finished.");
-        }
+        // Workflow started asynchronously; rely on polling to get messages
+        setNotice("Run submitted. Waiting for results...");
       } catch (sendError) {
         const message =
           sendError instanceof Error ? sendError.message : String(sendError);
@@ -787,19 +737,19 @@ export default function SessionChatPageClient({
   }, [loadChat]);
 
   const pendingUserInput = data?.pendingUserInput ?? null;
-  const pendingRequestId = pendingUserInput?.requestId ?? null;
+  const pendingToolUseId = pendingUserInput?.toolUseId ?? null;
 
   useEffect(() => {
     setPendingSubmitError(null);
     setPendingSubmitting(false);
-    if (pendingRequestId) {
+    if (pendingToolUseId) {
       setPendingDenyMessage("");
       setPendingAskSelections({});
       setPendingAskOtherAnswers({});
       return;
     }
     setPendingDenyMessage("");
-  }, [pendingRequestId]);
+  }, [pendingToolUseId]);
 
   const submitPendingUserInput = useCallback(
     async (payload: {
@@ -820,7 +770,7 @@ export default function SessionChatPageClient({
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              requestId: pendingUserInput.requestId,
+              toolUseId: pendingUserInput.toolUseId,
               behavior: payload.behavior,
               answers: payload.answers,
               message: payload.message,

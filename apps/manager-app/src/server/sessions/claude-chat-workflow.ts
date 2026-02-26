@@ -173,7 +173,7 @@ async function readBrokerSSE(
 // DB persistence step
 // ---------------------------------------------------------------------------
 
-function persistMessages(
+async function persistMessages(
   threadId: string,
   messages: SDKMessage[],
   claudeSdkSessionId: string | undefined,
@@ -181,7 +181,7 @@ function persistMessages(
   maxTurns: number,
   isError: boolean,
   errorMessage?: string,
-): void {
+): Promise<void> {
   "use step";
 
   const db = getDb();
@@ -200,7 +200,7 @@ function persistMessages(
   });
 }
 
-function releaseThreadLock(threadId: string): void {
+async function releaseThreadLock(threadId: string): Promise<void> {
   "use step";
 
   const db = getDb();
