@@ -7,9 +7,11 @@
 
 ## Runtime Strategy
 - Build the Modal image on a Node.js base and use `/workspace` as the working directory.
-- Execute `@anthropic-ai/claude-agent-sdk` in `manager-api` and delegate Claude Code CLI process spawning to the Session runtime via `spawnClaudeCodeProcess`.
+- Execute Claude Agent SDK V1 `query()` inside the Session sandbox via a **broker HTTP server** (port 8765), orchestrated by a **durable workflow** (Workflow DevKit) running in manager-app.
+- The broker provides SSE-streamed Claude execution with a state machine (`idle → running → waiting_for_approval`) and handles `canUseTool` user-feedback interception.
+- The workflow (`sessionChatTurnWorkflow`) manages one Claude turn per prompt: broker SSE reading → DB message persistence → approval hook loop → lock release.
 - Adopt an API-driven execution model instead of a persistent terminal relay such as `ttyd`.
-- Implement Session chat interactions via API endpoints (`/api/sessions/{id}/chat`) and render them in a dedicated Web chat page.
+- Implement Session chat interactions via API endpoints (`/api/sessions/{id}/chat`) and render them in a dedicated Web chat page. POST /chat is **asynchronous** (returns `{status: "submitted"}`), with the client relying on polling for message updates.
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
@@ -21,6 +23,9 @@
 - Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts (stateful `input-*` / `output-*`) and synthesize them from raw Claude SDK transcript events by `toolUseId` so the Web UI renders a single coherent tool card per invocation.
 - Build the Session chat Web UI with Vercel AI Elements primitives (for example `Conversation`, `Message`, `PromptInput`) and adapt them to the app's generalized chat message schema.
 - Support multi-turn Session chat continuity by resuming Claude Code conversations using Claude Agent SDK `query()` with stored SDK session IDs.
+- Use Workflow DevKit (useworkflow.dev) Local World for durable orchestration; wrap `next.config.ts` with `withWorkflow()`.
+- Derive approval hook tokens deterministically from session ID + tool use ID (`session:{sessionId}:approval:{toolUseId}`), eliminating the need for DB-persisted workflow state.
+- Resolve broker tunnel URL on-demand via Modal API (`sandbox.tunnels()`) instead of persisting it.
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
