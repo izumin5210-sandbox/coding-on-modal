@@ -30,6 +30,7 @@ import { postEphemeralMessage } from "@/server/slack/notifier";
 type SlackRawEvent = {
   channel?: string;
   team?: string;
+  team_id?: string;
   ts?: string;
   thread_ts?: string;
 };
@@ -77,7 +78,7 @@ function registerHandlers(bot: Chat<BotAdapters>) {
   bot.onNewMention(async (thread, message) => {
     const slackRaw = getSlackRaw(message);
     const slackUserId = message.author.userId;
-    const slackTeamId = slackRaw.team;
+    const slackTeamId = slackRaw.team ?? slackRaw.team_id;
     const channelId = slackRaw.channel;
 
     if (!slackUserId || !slackTeamId || !channelId) {
@@ -150,7 +151,7 @@ function registerHandlers(bot: Chat<BotAdapters>) {
   bot.onSubscribedMessage(async (thread, message) => {
     const slackRaw = getSlackRaw(message);
     const slackUserId = message.author.userId;
-    const slackTeamId = slackRaw.team;
+    const slackTeamId = slackRaw.team ?? slackRaw.team_id;
     const channelId = slackRaw.channel;
     const threadTs = slackRaw.thread_ts;
 
