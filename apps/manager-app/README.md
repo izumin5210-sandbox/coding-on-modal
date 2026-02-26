@@ -100,9 +100,9 @@ Open `http://localhost:3000`.
 
 Mentioning the bot in a Slack channel creates a new Session and starts an agent run. All subsequent messages in that Slack thread are routed to the same Session.
 
-1. Set up a Slack app with Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:write`.
+1. Set up a Slack app with Bot Token Scopes: `app_mentions:read`, `channels:history`, `groups:history`, `chat:write`, `im:write`.
 2. Enable Event Subscriptions and point the Request URL to `https://<host>/api/webhooks/slack`.
-3. Subscribe to bot events: `app_mention`, `message.im`.
+3. Subscribe to bot events: `app_mention`, `message.channels`, `message.groups`, `message.im`.
 4. Enable Interactivity and point the Request URL to `https://<host>/api/webhooks/slack`.
 5. Set `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, and `REDIS_URL` in your environment.
 6. Run `pnpm --filter manager-app db:migrate` to apply the Slack tables migration.

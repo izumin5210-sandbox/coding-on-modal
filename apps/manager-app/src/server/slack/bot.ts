@@ -1,23 +1,22 @@
 /**
  * Chat SDK bot instance for Slack integration.
  *
- * Handles incoming Slack events (mentions, thread replies, interactive
- * button actions) and bridges them to the existing agent chat service layer.
+ * Handles incoming Slack events (mentions, thread replies) and bridges
+ * them to the existing agent chat service layer.
+ *
+ * Approval button actions are handled separately in actions.ts / the
+ * webhook route to avoid relying on Chat SDK background processing.
  */
 
-import { Chat, type Message, type ActionEvent } from "chat";
+import { Chat, type Message } from "chat";
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createRedisState } from "@chat-adapter/state-redis";
 import { getDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { createSession } from "@/server/sessions/service";
-import {
-  sendSessionClaudeChatMessage,
-  submitSessionClaudeChatUserInput,
-} from "@/server/sessions/claude-chat-service";
+import { sendSessionClaudeChatMessage } from "@/server/sessions/claude-chat-service";
 import {
   getSlackThreadSession,
-  getSlackThreadSessionBySessionId,
   createSlackThreadSession,
   resolveUserIdFromSlackUser,
   createLinkToken,
@@ -187,60 +186,7 @@ function registerHandlers(bot: Chat<BotAdapters>) {
     }
   });
 
-  // ---- Approval button actions ----
-  bot.onAction("slack_approve", async (event: ActionEvent) => {
-    await handleApprovalAction(event, "allow");
-  });
-
-  bot.onAction("slack_deny", async (event: ActionEvent) => {
-    await handleApprovalAction(event, "deny");
-  });
-}
-
-async function handleApprovalAction(
-  event: ActionEvent,
-  behavior: "allow" | "deny",
-): Promise<void> {
-  if (!event.value) {
-    await event.thread.post("Invalid action payload.");
-    return;
-  }
-
-  let payload: { sessionId: string; toolUseId: string };
-  try {
-    payload = JSON.parse(event.value);
-  } catch {
-    await event.thread.post("Invalid action payload.");
-    return;
-  }
-
-  const db = getDb();
-
-  try {
-    const mapping = getSlackThreadSessionBySessionId(db, payload.sessionId);
-    if (!mapping) {
-      await event.thread.post("Session mapping not found.");
-      return;
-    }
-
-    await submitSessionClaudeChatUserInput(
-      db,
-      mapping.ownerUserId,
-      payload.sessionId,
-      {
-        toolUseId: payload.toolUseId,
-        behavior,
-      },
-    );
-
-    const label =
-      behavior === "allow"
-        ? ":white_check_mark: Allowed"
-        : ":no_entry: Denied";
-    await event.thread.post(`${label} tool \`${payload.toolUseId}\``);
-  } catch (error) {
-    const msg =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    await event.thread.post(`:x: Failed to submit approval: ${msg}`);
-  }
+  // Approval button actions (slack_approve / slack_deny) are handled directly
+  // in the webhook route (see actions.ts) to avoid relying on Chat SDK's
+  // background task processing via waitUntil / after().
 }
