@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { query } from "@anthropic-ai/claude-agent-sdk";
 import { NotFoundError, type Secret } from "modal";
 import type {
-  AgentSessionInput,
   CreateSessionInput,
   ExecSessionInput,
   SessionExecResult,
@@ -16,7 +14,6 @@ import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
 import { getSessionImage } from "@/server/modal/image";
 import { deleteClaudeChatDataBySessionId } from "@/server/sessions/claude-chat-store";
-import { createModalClaudeSpawner } from "@/server/sessions/claude-remote-spawn";
 import {
   deleteSession,
   getSession,
@@ -540,114 +537,3 @@ export async function executeInSession(
   }
 }
 
-function getAgentErrorExitCode(error: unknown): number {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "exitCode" in error &&
-    typeof (error as { exitCode?: unknown }).exitCode === "number"
-  ) {
-    return (error as { exitCode: number }).exitCode;
-  }
-
-  return 1;
-}
-
-function getAgentErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message.trim();
-  }
-
-  return String(error ?? "Agent execution failed");
-}
-
-export async function runAgentInSession(
-  db: AppDb,
-  ownerUserId: string,
-  id: string,
-  input: AgentSessionInput,
-): Promise<SessionExecResult> {
-  const env = getEnv();
-  const encryptedClaudeApiKey = getEncryptedClaudeTokenByUserId(
-    db,
-    ownerUserId,
-  );
-  if (!encryptedClaudeApiKey) {
-    throw new SessionError(
-      "Claude API key is not configured. Please save it before running the agent.",
-      400,
-    );
-  }
-  const apiKey = decryptToken(encryptedClaudeApiKey);
-
-  const record = await mustGetSession(db, ownerUserId, id);
-  if (record.status === "terminated") {
-    throw new SessionError("Session is terminated", 409);
-  }
-
-  const prompt = input.prompt.trim();
-  if (!prompt) {
-    throw new SessionError("prompt must not be empty", 400);
-  }
-  const authUser = getAuthUserById(db, ownerUserId);
-  if (!authUser) {
-    throw new SessionError("Authentication required", 401);
-  }
-  const sshUser = resolveSessionSshUser(authUser.github.login);
-
-  const maxTurns = Math.min(
-    20,
-    Math.max(1, input.maxTurns ?? env.AGENT_MAX_TURNS),
-  );
-  const stdoutChunks: string[] = [];
-  const stderrChunks: string[] = [];
-  const spawner = createModalClaudeSpawner({
-    providerSessionId: record.providerSessionId,
-    linuxUser: sshUser,
-    apiKey,
-    timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
-    onStderrChunk(chunk) {
-      stderrChunks.push(chunk);
-    },
-  });
-  const cwd = input.cwd?.trim() || record.workspacePath;
-
-  try {
-    for await (const message of query({
-      prompt,
-      options: {
-        cwd,
-        maxTurns,
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
-        spawnClaudeCodeProcess: spawner.spawnClaudeCodeProcess,
-      },
-    })) {
-      stdoutChunks.push(`${JSON.stringify(message)}\n`);
-    }
-
-    return {
-      stdout: stdoutChunks.join(""),
-      stderr: stderrChunks.join(""),
-      exitCode: 0,
-    };
-  } catch (error) {
-    if (spawner.state.sessionMissing) {
-      updateSession(db, ownerUserId, id, { status: "terminated" });
-      throw new SessionError("Session no longer exists", 409);
-    }
-
-    const errorMessage = getAgentErrorMessage(error);
-    if (!stderrChunks.some((chunk) => chunk.includes(errorMessage))) {
-      stderrChunks.push(
-        `${errorMessage}${errorMessage.endsWith("\n") ? "" : "\n"}`,
-      );
-    }
-
-    return {
-      stdout: stdoutChunks.join(""),
-      stderr: stderrChunks.join(""),
-      exitCode: getAgentErrorExitCode(error),
-    };
-  }
-}
