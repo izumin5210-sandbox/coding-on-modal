@@ -40,8 +40,3 @@ export type ExecSessionInput = {
   pty?: boolean;
 };
 
-export type AgentSessionInput = {
-  prompt: string;
-  cwd?: string;
-  maxTurns?: number;
-};
