@@ -16,7 +16,7 @@ type Params = {
 };
 
 const submitSchema = z.object({
-  requestId: z.string().min(1),
+  toolUseId: z.string().min(1),
   behavior: z.enum(["allow", "deny"]),
   message: z.string().optional(),
   answers: z

@@ -230,10 +230,9 @@ export type SendSessionChatMessageInput = {
 };
 
 export type SendSessionChatMessageResponse = {
-  session: SessionRecord;
-  thread: SessionClaudeCodeThread;
-  appendedMessages: SessionChatMessage[];
-  appendedRawCount: number;
-  run: SessionChatRunSummary;
-  pendingUserInput?: SessionChatPendingUserInput | null;
+  status: "submitted";
+};
+
+export type SubmitSessionChatUserInputResponse = {
+  ok: true;
 };

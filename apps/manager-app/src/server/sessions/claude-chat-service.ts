@@ -1,4 +1,5 @@
-import { query, type SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { resumeHook, start } from "workflow/api";
 import type {
   GetSessionChatResponse,
   SendSessionChatMessageInput,
@@ -7,37 +8,30 @@ import type {
   SessionChatMessage,
   SessionChatMessageMetadata,
   SessionChatMessagePart,
-  SessionChatRunSummary,
+  SessionChatPendingUserInput,
+  SessionChatPendingUserInputQuestion,
+  SubmitSessionChatUserInputResponse,
 } from "@/lib/session-chat-types";
-import { decryptToken } from "@/server/crypto/token";
 import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import {
   acquireClaudeChatThreadRunLock,
-  appendClaudeChatRawMessages,
   type ClaudeChatRawMessageRecord,
   type ClaudeChatThreadStoreRecord,
   ensureClaudeChatThread,
   getClaudeChatThreadBySessionId,
   listClaudeChatRawMessages,
-  releaseClaudeChatThreadRunLock,
-  updateClaudeChatThread,
 } from "@/server/sessions/claude-chat-store";
 import {
-  clearPendingClaudeChatUserInput,
-  createClaudeChatPermissionPolicy,
-  getPendingClaudeChatUserInput,
-  submitPendingClaudeChatUserInput,
-} from "@/server/sessions/claude-chat-user-input";
-import { createModalClaudeSpawner } from "@/server/sessions/claude-remote-spawn";
-import { getSessionRecord, SessionError } from "@/server/sessions/service";
-import { getSession, updateSession } from "@/server/sessions/store";
+  approvalHookToken,
+  sessionChatTurnWorkflow,
+} from "@/server/sessions/claude-chat-workflow";
 import {
-  getAuthUserById,
-  getEncryptedClaudeTokenByUserId,
-} from "@/server/users/store";
-
-const LINUX_USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
+  getSessionRecord,
+  resolveBrokerTunnelUrl,
+  SessionError,
+} from "@/server/sessions/service";
+import { getSession } from "@/server/sessions/store";
 
 type SdkEnvelope = {
   id: string;
@@ -142,17 +136,6 @@ function buildProviderMetadata(
 
 function toUiThread(thread: ClaudeChatThreadStoreRecord) {
   return thread;
-}
-
-function resolveSessionSshUser(githubLogin: string): string {
-  const normalized = githubLogin.trim();
-  if (!LINUX_USERNAME_PATTERN.test(normalized)) {
-    throw new SessionError(
-      `GitHub login "${githubLogin}" cannot be used as Session SSH user.`,
-      400,
-    );
-  }
-  return normalized;
 }
 
 function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
@@ -356,30 +339,6 @@ function buildResultSummaryText(
     return message.result || "Claude finished successfully.";
   }
   return message.errors.join("\n") || "Claude finished with an error.";
-}
-
-function isCanonicalUserPromptMessage(message: SDKMessage): boolean {
-  return (
-    message.type === "user" &&
-    message.parent_tool_use_id === null &&
-    message.tool_use_result === undefined &&
-    message.isSynthetic !== true
-  );
-}
-
-function buildSubmittedUserPromptMessage(
-  prompt: string,
-  sdkSessionId: string,
-): SDKMessage {
-  return {
-    type: "user",
-    message: {
-      role: "user",
-      content: prompt,
-    },
-    parent_tool_use_id: null,
-    session_id: sdkSessionId,
-  } as SDKMessage;
 }
 
 function statusPartFromRecord(
@@ -740,47 +699,60 @@ function toApiMessages(
   return synthesizeDynamicToolParts(sorted);
 }
 
-function buildRunSummary(
-  messages: SDKMessage[],
-  fallbackError?: string,
-): SessionChatRunSummary {
-  const result = [...messages]
-    .reverse()
-    .find((message) => message.type === "result");
-  if (result?.type === "result") {
-    const summary: SessionChatRunSummary = {
-      isError: result.is_error,
-      subtype: result.subtype,
-      durationMs: result.duration_ms,
-      durationApiMs: result.duration_api_ms,
-      numTurns: result.num_turns,
-      totalCostUsd: result.total_cost_usd,
-    };
-    if (result.subtype !== "success") {
-      summary.errorMessage = result.errors.join("\n") || fallbackError;
-    }
-    return summary;
-  }
-
-  return {
-    isError: true,
-    errorMessage:
-      fallbackError ?? "Claude chat run did not produce a result message.",
-  };
-}
-
-function getSessionMissingStatus(spawner: {
-  state: { sessionMissing: boolean };
-}) {
-  return spawner.state.sessionMissing;
-}
-
 type SubmitSessionClaudeChatUserInputInput = {
-  requestId: string;
+  toolUseId: string;
   behavior: "allow" | "deny";
   message?: string;
   answers?: Record<string, string | string[]>;
 };
+
+async function fetchBrokerPendingInput(
+  providerSessionId: string,
+): Promise<SessionChatPendingUserInput | null> {
+  try {
+    const brokerUrl = await resolveBrokerTunnelUrl(providerSessionId);
+    if (!brokerUrl) return null;
+
+    const response = await fetch(`${brokerUrl}/chat/status`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      state: string;
+      pendingInput: Record<string, unknown> | null;
+    };
+    if (!data.pendingInput) return null;
+
+    const pi = data.pendingInput;
+    const kind = pi.kind as string;
+    const toolUseId = pi.toolUseId as string;
+
+    const base = {
+      requestId: toolUseId,
+      toolName: pi.toolName as string,
+      toolUseId,
+      createdAt: new Date().toISOString(),
+      input: (pi.input as Record<string, unknown>) ?? {},
+      decisionReason: pi.decisionReason as string | undefined,
+      blockedPath: pi.blockedPath as string | undefined,
+      agentId: pi.agentId as string | undefined,
+      suggestions: pi.suggestions as unknown[] | undefined,
+    };
+
+    if (kind === "ask-user-question" && Array.isArray(pi.questions)) {
+      return {
+        ...base,
+        kind: "ask-user-question",
+        questions: pi.questions as SessionChatPendingUserInputQuestion[],
+      };
+    }
+
+    return { ...base, kind: "tool-approval" };
+  } catch {
+    return null;
+  }
+}
 
 async function getOrCreateThreadForSession(
   db: AppDb,
@@ -812,10 +784,16 @@ export async function getSessionClaudeChat(
     session.workspacePath,
   );
   const rawMessages = listClaudeChatRawMessages(db, thread.id);
-  let pendingUserInput = getPendingClaudeChatUserInput(sessionId);
-  if (pendingUserInput && !thread.isRunning) {
-    clearPendingClaudeChatUserInput(sessionId);
-    pendingUserInput = null;
+
+  // Fetch pending input from broker when a run is active
+  let pendingUserInput: SessionChatPendingUserInput | null = null;
+  if (thread.isRunning) {
+    const record = getSession(db, ownerUserId, sessionId);
+    if (record) {
+      pendingUserInput = await fetchBrokerPendingInput(
+        record.providerSessionId,
+      );
+    }
   }
 
   return {
@@ -832,16 +810,15 @@ export async function submitSessionClaudeChatUserInput(
   ownerUserId: string,
   sessionId: string,
   input: SubmitSessionClaudeChatUserInputInput,
-): Promise<{ ok: true; resolvedRequestId: string }> {
+): Promise<SubmitSessionChatUserInputResponse> {
   await getSessionRecord(db, ownerUserId, sessionId);
-  const result = submitPendingClaudeChatUserInput({
-    sessionId,
-    requestId: input.requestId,
+  const token = approvalHookToken(sessionId, input.toolUseId);
+  await resumeHook(token, {
     behavior: input.behavior,
     message: input.message,
     answers: input.answers,
   });
-  return { ok: true, resolvedRequestId: result.resolvedRequestId };
+  return { ok: true };
 }
 
 export async function sendSessionClaudeChatMessage(
@@ -851,17 +828,6 @@ export async function sendSessionClaudeChatMessage(
   input: SendSessionChatMessageInput,
 ): Promise<SendSessionChatMessageResponse> {
   const env = getEnv();
-  const encryptedClaudeApiKey = getEncryptedClaudeTokenByUserId(
-    db,
-    ownerUserId,
-  );
-  if (!encryptedClaudeApiKey) {
-    throw new SessionError(
-      "Claude API key is not configured. Please save it before running the agent.",
-      400,
-    );
-  }
-  const apiKey = decryptToken(encryptedClaudeApiKey);
 
   const record = getSession(db, ownerUserId, sessionId);
   if (!record) {
@@ -875,12 +841,6 @@ export async function sendSessionClaudeChatMessage(
   if (!prompt) {
     throw new SessionError("prompt must not be empty", 400);
   }
-
-  const authUser = getAuthUserById(db, ownerUserId);
-  if (!authUser) {
-    throw new SessionError("Authentication required", 401);
-  }
-  const sshUser = resolveSessionSshUser(authUser.github.login);
 
   const baseThread = await getOrCreateThreadForSession(
     db,
@@ -900,99 +860,20 @@ export async function sendSessionClaudeChatMessage(
     20,
     Math.max(1, input.maxTurns ?? lockedThread.maxTurns ?? env.AGENT_MAX_TURNS),
   );
-  const rawSdkMessages: SDKMessage[] = [];
-  let claudeSdkSessionId = lockedThread.claudeSdkSessionId;
-  let runSummary: SessionChatRunSummary = { isError: true };
-  let persistedThread = lockedThread;
-  let persistedRows: ClaudeChatRawMessageRecord[] = [];
 
-  const spawner = createModalClaudeSpawner({
-    providerSessionId: record.providerSessionId,
-    linuxUser: sshUser,
-    apiKey,
-    timeoutMs: env.SANDBOX_TIMEOUT_MINUTES * 60_000,
-  });
-  const permissionPolicy = createClaudeChatPermissionPolicy({
-    sessionId,
-  });
-
-  clearPendingClaudeChatUserInput(sessionId);
-
-  try {
-    for await (const message of query({
+  // Start a durable workflow for this turn (fire-and-forget)
+  await start(sessionChatTurnWorkflow, [
+    {
+      sessionId,
+      threadId: lockedThread.id,
+      ownerUserId,
+      providerSessionId: record.providerSessionId,
       prompt,
-      options: {
-        cwd,
-        maxTurns,
-        resume: claudeSdkSessionId,
-        permissionMode: permissionPolicy.permissionMode,
-        allowDangerouslySkipPermissions:
-          permissionPolicy.allowDangerouslySkipPermissions,
-        canUseTool: permissionPolicy.canUseTool,
-        spawnClaudeCodeProcess: spawner.spawnClaudeCodeProcess,
-      },
-    })) {
-      rawSdkMessages.push(message);
-      if (!claudeSdkSessionId && typeof message.session_id === "string") {
-        claudeSdkSessionId = message.session_id;
-      }
-    }
+      cwd,
+      maxTurns,
+      claudeSdkSessionId: lockedThread.claudeSdkSessionId,
+    },
+  ]);
 
-    runSummary = buildRunSummary(rawSdkMessages);
-  } catch (error) {
-    if (getSessionMissingStatus(spawner)) {
-      updateSession(db, ownerUserId, sessionId, { status: "terminated" });
-      throw new SessionError("Session no longer exists", 409);
-    }
-    runSummary = buildRunSummary(
-      rawSdkMessages,
-      error instanceof Error ? error.message : String(error),
-    );
-  } finally {
-    clearPendingClaudeChatUserInput(sessionId);
-    const sdkMessagesToPersist = rawSdkMessages.some((message) =>
-      isCanonicalUserPromptMessage(message),
-    )
-      ? rawSdkMessages
-      : [
-          buildSubmittedUserPromptMessage(
-            prompt,
-            claudeSdkSessionId ?? "unknown",
-          ),
-          ...rawSdkMessages,
-        ];
-
-    if (sdkMessagesToPersist.length > 0) {
-      persistedRows = appendClaudeChatRawMessages(
-        db,
-        lockedThread.id,
-        sdkMessagesToPersist.map((message) => JSON.stringify(message)),
-      );
-    }
-
-    persistedThread =
-      updateClaudeChatThread(db, lockedThread.id, {
-        claudeSdkSessionId,
-        cwd,
-        maxTurns,
-        lastError: runSummary.isError
-          ? (runSummary.errorMessage ?? "Chat run failed")
-          : undefined,
-      }) ?? lockedThread;
-
-    persistedThread =
-      releaseClaudeChatThreadRunLock(db, lockedThread.id) ?? persistedThread;
-  }
-
-  const session = await getSessionRecord(db, ownerUserId, sessionId);
-  const appendedMessages = toApiMessages(persistedRows);
-
-  return {
-    session,
-    thread: toUiThread(persistedThread),
-    appendedMessages,
-    appendedRawCount: persistedRows.length,
-    run: runSummary,
-    pendingUserInput: getPendingClaudeChatUserInput(sessionId),
-  };
+  return { status: "submitted" };
 }
