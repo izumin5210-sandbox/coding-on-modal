@@ -1,6 +1,5 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { start } from "workflow/api";
-import { resumeHook } from "workflow/api";
+import { resumeHook, start } from "workflow/api";
 import type {
   GetSessionChatResponse,
   SendSessionChatMessageInput,

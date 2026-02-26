@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { NotFoundError, type Secret } from "modal";
-import { getBrokerScript } from "@/server/sessions/broker/broker-script";
 import type {
   CreateSessionInput,
   ExecSessionInput,
@@ -14,6 +13,7 @@ import type { AppDb } from "@/server/db";
 import { getEnv } from "@/server/env";
 import { getModalApp, getModalClient } from "@/server/modal/client";
 import { getSessionImage } from "@/server/modal/image";
+import { getBrokerScript } from "@/server/sessions/broker/broker-script";
 import {
   deleteClaudeChatDataBySessionId,
   getClaudeChatThreadBySessionId,
@@ -634,4 +634,3 @@ export async function executeInSession(
     throw error;
   }
 }
-

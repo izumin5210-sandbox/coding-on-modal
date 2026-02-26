@@ -14,8 +14,17 @@
  *                waiting_for_approval → (approve) → running → ...
  */
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { query, type SDKMessage, type PermissionResult, type PermissionUpdate } from "@anthropic-ai/claude-agent-sdk";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
+import {
+  type PermissionResult,
+  type PermissionUpdate,
+  query,
+  type SDKMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,9 +105,17 @@ function normalizeAskUserQuestions(
         if (!label || !description) return null;
         return { label, description };
       })
-      .filter((opt): opt is { label: string; description: string } => Boolean(opt));
-    if (options.length !== item.options.length || options.length < 2) return null;
-    normalized.push({ header, question, options, multiSelect: item.multiSelect === true });
+      .filter((opt): opt is { label: string; description: string } =>
+        Boolean(opt),
+      );
+    if (options.length !== item.options.length || options.length < 2)
+      return null;
+    normalized.push({
+      header,
+      question,
+      options,
+      multiSelect: item.multiSelect === true,
+    });
   }
   return normalized.length > 0 ? normalized : null;
 }
@@ -146,8 +163,13 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown) {
 function buildPendingInputInfo(): Record<string, unknown> | null {
   if (!pendingApproval) return null;
 
-  const normalizedToolName = pendingApproval.toolName.toLowerCase().replaceAll(/[_-]/g, "");
-  const kind = normalizedToolName === "askuserquestion" ? "ask-user-question" : "tool-approval";
+  const normalizedToolName = pendingApproval.toolName
+    .toLowerCase()
+    .replaceAll(/[_-]/g, "");
+  const kind =
+    normalizedToolName === "askuserquestion"
+      ? "ask-user-question"
+      : "tool-approval";
 
   const base: Record<string, unknown> = {
     kind,
@@ -193,7 +215,11 @@ async function runClaudeTurn(params: {
     },
   ): Promise<PermissionResult> => {
     if (!shouldInterceptUserFeedbackTool(toolName)) {
-      return { behavior: "allow", updatedInput: toolInput, toolUseID: sdkOptions.toolUseID };
+      return {
+        behavior: "allow",
+        updatedInput: toolInput,
+        toolUseID: sdkOptions.toolUseID,
+      };
     }
 
     brokerState = "waiting_for_approval";
@@ -271,7 +297,9 @@ async function runClaudeTurn(params: {
 
 async function handleChatSend(req: IncomingMessage, res: ServerResponse) {
   if (brokerState !== "idle") {
-    jsonResponse(res, 409, { error: `Broker is ${brokerState}, cannot start new turn` });
+    jsonResponse(res, 409, {
+      error: `Broker is ${brokerState}, cannot start new turn`,
+    });
     return;
   }
 
@@ -310,13 +338,16 @@ async function handleChatApprove(req: IncomingMessage, res: ServerResponse) {
   if (body.behavior === "deny") {
     approval.resolve({
       behavior: "deny",
-      message: body.message ?? `User denied tool execution: ${approval.toolName}`,
+      message:
+        body.message ?? `User denied tool execution: ${approval.toolName}`,
       toolUseID: approval.toolUseId,
     });
   } else {
-    const updatedInput = body.updatedInput ?? (body.answers
-      ? { ...approval.input, answers: body.answers }
-      : approval.input);
+    const updatedInput =
+      body.updatedInput ??
+      (body.answers
+        ? { ...approval.input, answers: body.answers }
+        : approval.input);
     approval.resolve({
       behavior: "allow",
       updatedInput,

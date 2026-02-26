@@ -10,14 +10,14 @@
  * 6. Releases the thread run lock
  */
 
-import { createHook } from "workflow";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { createHook } from "workflow";
+import { getDb } from "@/server/db";
 import {
   appendClaudeChatRawMessages,
   releaseClaudeChatThreadRunLock,
   updateClaudeChatThread,
 } from "@/server/sessions/claude-chat-store";
-import { getDb } from "@/server/db";
 import { resolveBrokerTunnelUrl } from "@/server/sessions/service";
 
 // ---------------------------------------------------------------------------
@@ -51,13 +51,21 @@ type TurnStepResult =
       toolUseId: string;
       pendingInfo: Record<string, unknown>;
     }
-  | { type: "error"; claudeSdkSessionId?: string; messages: SDKMessage[]; error: string };
+  | {
+      type: "error";
+      claudeSdkSessionId?: string;
+      messages: SDKMessage[];
+      error: string;
+    };
 
 // ---------------------------------------------------------------------------
 // Deterministic hook token derivation
 // ---------------------------------------------------------------------------
 
-export function approvalHookToken(sessionId: string, toolUseId: string): string {
+export function approvalHookToken(
+  sessionId: string,
+  toolUseId: string,
+): string {
   return `session:${sessionId}:approval:${toolUseId}`;
 }
 
@@ -80,11 +88,19 @@ async function readBrokerSSE(
 
   if (!response.ok) {
     const text = await response.text();
-    return { type: "error", messages: [], error: `Broker returned ${response.status}: ${text}` };
+    return {
+      type: "error",
+      messages: [],
+      error: `Broker returned ${response.status}: ${text}`,
+    };
   }
 
   if (!response.body) {
-    return { type: "error", messages: [], error: "Broker response has no body" };
+    return {
+      type: "error",
+      messages: [],
+      error: "Broker response has no body",
+    };
   }
 
   const messages: SDKMessage[] = [];
@@ -129,7 +145,8 @@ async function readBrokerSSE(
           } else if (currentEvent === "permission_request") {
             resultType = "permission_request";
             permissionInfo = parsed;
-            permissionToolUseId = typeof parsed.toolUseId === "string" ? parsed.toolUseId : "";
+            permissionToolUseId =
+              typeof parsed.toolUseId === "string" ? parsed.toolUseId : "";
           } else if (currentEvent === "done") {
             resultType = "done";
             if (typeof parsed.claudeSdkSessionId === "string") {
@@ -137,7 +154,10 @@ async function readBrokerSSE(
             }
           } else if (currentEvent === "error") {
             resultType = "error";
-            errorMessage = typeof parsed.message === "string" ? parsed.message : "Unknown broker error";
+            errorMessage =
+              typeof parsed.message === "string"
+                ? parsed.message
+                : "Unknown broker error";
             if (typeof parsed.claudeSdkSessionId === "string") {
               claudeSdkSessionId = parsed.claudeSdkSessionId;
             }
@@ -147,7 +167,6 @@ async function readBrokerSSE(
         }
         currentEvent = "";
         currentData = "";
-        continue;
       }
     }
   }
@@ -281,7 +300,9 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
 // Helper step: resolve broker URL
 // ---------------------------------------------------------------------------
 
-async function resolveBrokerUrl(providerSessionId: string): Promise<string | null> {
+async function resolveBrokerUrl(
+  providerSessionId: string,
+): Promise<string | null> {
   "use step";
 
   return resolveBrokerTunnelUrl(providerSessionId);
