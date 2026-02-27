@@ -2,26 +2,27 @@
  * Chat SDK bot instance for Slack integration.
  *
  * Handles incoming Slack events (mentions, thread replies) and bridges
- * them to the existing agent chat service layer.
- *
- * Approval button actions are handled separately in actions.ts / the
- * webhook route to avoid relying on Chat SDK background processing.
+ * them to the existing agent chat service layer. Approval button actions
+ * (Allow / Deny) are handled via `bot.onAction()`.
  */
 
-import { Chat, type Message } from "chat";
 import { createSlackAdapter } from "@chat-adapter/slack";
 import { createRedisState } from "@chat-adapter/state-redis";
+import { Chat, type Message } from "chat";
 import { getDb } from "@/server/db";
 import { getEnv } from "@/server/env";
-import { createSession } from "@/server/sessions/service";
-import { sendSessionClaudeChatMessage } from "@/server/sessions/claude-chat-service";
 import {
-  getSlackThreadSession,
-  createSlackThreadSession,
-  resolveUserIdFromSlackUser,
+  sendSessionClaudeChatMessage,
+  submitSessionClaudeChatUserInput,
+} from "@/server/sessions/claude-chat-service";
+import { createSession } from "@/server/sessions/service";
+import {
   createLinkToken,
+  createSlackThreadSession,
+  getSlackThreadSession,
+  getSlackThreadSessionBySessionId,
+  resolveUserIdFromSlackUser,
 } from "@/server/slack/store";
-import { postEphemeralMessage } from "@/server/slack/notifier";
 
 // ---------------------------------------------------------------------------
 // Slack raw event types (subset used for extracting platform-specific data)
@@ -87,7 +88,11 @@ function registerHandlers(bot: Chat<BotAdapters>) {
     }
 
     const db = getDb();
-    const ownerUserId = resolveUserIdFromSlackUser(db, slackUserId, slackTeamId);
+    const ownerUserId = resolveUserIdFromSlackUser(
+      db,
+      slackUserId,
+      slackTeamId,
+    );
 
     if (!ownerUserId) {
       const env = getEnv();
@@ -100,10 +105,12 @@ function registerHandlers(bot: Chat<BotAdapters>) {
         );
       const linkUrl = `${baseUrl}/api/slack/link?token=${token}`;
 
-      await postEphemeralMessage(
-        channelId,
+      await thread.postEphemeral(
         slackUserId,
-        `Your Slack account is not linked yet. Please visit the following URL while logged in to link your account:\n${linkUrl}`,
+        {
+          markdown: `Your Slack account is not linked yet. Please visit the following URL while logged in to link your account:\n${linkUrl}`,
+        },
+        { fallbackToDM: false },
       );
       return;
     }
@@ -165,12 +172,7 @@ function registerHandlers(bot: Chat<BotAdapters>) {
     );
     if (!ownerUserId) return;
 
-    const mapping = getSlackThreadSession(
-      db,
-      slackTeamId,
-      channelId,
-      threadTs,
-    );
+    const mapping = getSlackThreadSession(db, slackTeamId, channelId, threadTs);
     if (!mapping) return;
 
     const prompt = message.text?.trim() ?? "";
@@ -187,7 +189,33 @@ function registerHandlers(bot: Chat<BotAdapters>) {
     }
   });
 
-  // Approval button actions (slack_approve / slack_deny) are handled directly
-  // in the webhook route (see actions.ts) to avoid relying on Chat SDK's
-  // background task processing via waitUntil / after().
+  // ---- Approval / Deny button actions ----
+  bot.onAction(["slack_approve", "slack_deny"], async (event) => {
+    const behavior: "allow" | "deny" =
+      event.actionId === "slack_approve" ? "allow" : "deny";
+
+    if (!event.value) return;
+
+    let payload: { sessionId: string; toolUseId: string };
+    try {
+      payload = JSON.parse(event.value);
+    } catch {
+      return;
+    }
+
+    const db = getDb();
+    const mapping = getSlackThreadSessionBySessionId(db, payload.sessionId);
+    if (!mapping) return;
+
+    await submitSessionClaudeChatUserInput(
+      db,
+      mapping.ownerUserId,
+      payload.sessionId,
+      { toolUseId: payload.toolUseId, behavior },
+    );
+
+    const label =
+      behavior === "allow" ? ":white_check_mark: Allowed" : ":no_entry: Denied";
+    await event.thread.post(`${label} tool \`${payload.toolUseId}\``);
+  });
 }

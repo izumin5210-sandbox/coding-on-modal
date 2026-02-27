@@ -1,9 +1,8 @@
 /**
  * Posts messages to Slack threads from the workflow context.
  *
- * Uses the Slack Web API directly via fetch (no extra dependencies) so that
- * it can be called from durable workflow steps without requiring the Chat SDK
- * bot singleton.
+ * Uses the Chat SDK Slack adapter for all outgoing messages, keeping
+ * Slack API access centralised through a single abstraction layer.
  *
  * Works with raw SDKMessage[] (the format available in the workflow) rather
  * than the fully-normalized SessionChatMessage[] to avoid a circular
@@ -11,44 +10,8 @@
  */
 
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
-import { getEnv } from "@/server/env";
-
-// ---------------------------------------------------------------------------
-// Low-level Slack API helpers
-// ---------------------------------------------------------------------------
-
-type SlackPostResult = {
-  ok: boolean;
-  error?: string;
-  ts?: string;
-};
-
-function getSlackBotToken(): string {
-  return getEnv().SLACK_BOT_TOKEN;
-}
-
-async function slackPostMessage(
-  channel: string,
-  threadTs: string,
-  text: string,
-  blocks?: unknown[],
-): Promise<SlackPostResult> {
-  const response = await fetch("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      Authorization: `Bearer ${getSlackBotToken()}`,
-    },
-    body: JSON.stringify({
-      channel,
-      thread_ts: threadTs,
-      text,
-      ...(blocks ? { blocks } : {}),
-      mrkdwn: true,
-    }),
-  });
-  return (await response.json()) as SlackPostResult;
-}
+import { Actions, Button, Card, CardText } from "chat";
+import { getBot } from "@/server/slack/bot";
 
 // ---------------------------------------------------------------------------
 // SDK message → Slack text extraction
@@ -64,7 +27,9 @@ function truncate(text: string, maxLength: number): string {
  * Only renders content that is meaningful in Slack — skips internal events,
  * tool progress, stream events, etc.
  */
-function extractSlackTextFromSdkMessages(messages: SDKMessage[]): string | null {
+function extractSlackTextFromSdkMessages(
+  messages: SDKMessage[],
+): string | null {
   const chunks: string[] = [];
 
   for (const message of messages) {
@@ -149,6 +114,15 @@ function formatPendingInfoForSlack(
 }
 
 // ---------------------------------------------------------------------------
+// Adapter helper
+// ---------------------------------------------------------------------------
+
+function getSlackAdapter() {
+  const bot = getBot();
+  return bot.getAdapter("slack");
+}
+
+// ---------------------------------------------------------------------------
 // Public API — called from workflow steps
 // ---------------------------------------------------------------------------
 
@@ -163,10 +137,9 @@ export async function postSdkMessagesToSlack(
   const text = extractSlackTextFromSdkMessages(messages);
   if (!text) return;
 
-  const result = await slackPostMessage(channelId, threadTs, text);
-  if (!result.ok) {
-    console.error(`[slack-notifier] chat.postMessage failed: ${result.error}`);
-  }
+  const adapter = getSlackAdapter();
+  const threadId = adapter.encodeThreadId({ channel: channelId, threadTs });
+  await adapter.postMessage(threadId, { markdown: text });
 }
 
 /**
@@ -186,66 +159,28 @@ export async function postPendingInputToSlack(
     kind: pendingInfo.kind,
   });
 
-  const blocks = [
-    {
-      type: "section",
-      text: { type: "mrkdwn", text },
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Allow" },
+  const card = Card({
+    children: [
+      CardText(text),
+      Actions([
+        Button({
+          id: "slack_approve",
+          label: "Allow",
           style: "primary",
-          action_id: "slack_approve",
           value: actionPayload,
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Deny" },
+        }),
+        Button({
+          id: "slack_deny",
+          label: "Deny",
           style: "danger",
-          action_id: "slack_deny",
           value: actionPayload,
-        },
-      ],
-    },
-  ];
-
-  const result = await slackPostMessage(
-    channelId,
-    threadTs,
-    `Approval required: ${typeof pendingInfo.toolName === "string" ? pendingInfo.toolName : "tool"}`,
-    blocks,
-  );
-  if (!result.ok) {
-    console.error(
-      `[slack-notifier] pending-input postMessage failed: ${result.error}`,
-    );
-  }
-}
-
-/**
- * Sends an ephemeral message visible only to a specific user.
- */
-export async function postEphemeralMessage(
-  channelId: string,
-  userId: string,
-  text: string,
-): Promise<void> {
-  const response = await fetch("https://slack.com/api/chat.postEphemeral", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      Authorization: `Bearer ${getSlackBotToken()}`,
-    },
-    body: JSON.stringify({ channel: channelId, user: userId, text }),
+        }),
+      ]),
+    ],
   });
 
-  const result = (await response.json()) as { ok: boolean; error?: string };
-  if (!result.ok) {
-    console.error(
-      `[slack-notifier] chat.postEphemeral failed: ${result.error}`,
-    );
-  }
+  const adapter = getSlackAdapter();
+  const threadId = adapter.encodeThreadId({ channel: channelId, threadTs });
+  const fallbackText = `Approval required: ${typeof pendingInfo.toolName === "string" ? pendingInfo.toolName : "tool"}`;
+  await adapter.postMessage(threadId, { card, fallbackText });
 }
