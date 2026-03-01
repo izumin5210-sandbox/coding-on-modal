@@ -18,7 +18,6 @@
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
 - `apps/manager-app/src/app/api/graphql/route.ts`: GraphQL endpoint for authenticated manager operations (viewer, Session CRUD, exec, chat).
-- Legacy REST manager routes under `apps/manager-app/src/app/api/{me,claude-token,sessions/*}` remain only during migration and should be removed after GraphQL client cutover.
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.

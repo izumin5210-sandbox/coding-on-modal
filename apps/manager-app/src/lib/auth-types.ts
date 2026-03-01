@@ -8,8 +8,3 @@ export type AuthUser = {
     avatarUrl?: string;
   };
 };
-
-export type MeResponse = {
-  user: AuthUser;
-  claudeApiKeyConfigured: boolean;
-};
