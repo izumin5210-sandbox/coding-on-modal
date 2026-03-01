@@ -1,13 +1,12 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resumeHook, start } from "workflow/api";
 import type {
+  AgentMessage,
+  AgentMessageMetadata,
+  AgentMessagePart,
   GetSessionChatResponse,
   SendSessionChatMessageInput,
   SendSessionChatMessageResponse,
-  SessionChatDynamicToolPart,
-  SessionChatMessage,
-  SessionChatMessageMetadata,
-  SessionChatMessagePart,
   SessionChatPendingUserInput,
   SessionChatPendingUserInputQuestion,
   SubmitSessionChatUserInputResponse,
@@ -40,6 +39,139 @@ type SdkEnvelope = {
   message: SDKMessage;
 };
 
+type IntermediateDynamicToolPart =
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "input-streaming";
+      input: unknown | undefined;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "input-available";
+      input: unknown;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-available";
+      input: unknown;
+      output: unknown;
+      preliminary?: boolean;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-error";
+      input: unknown;
+      errorText: string;
+    }
+  | {
+      type: "dynamic-tool";
+      toolName: string;
+      toolCallId: string;
+      title?: string;
+      providerExecuted?: boolean;
+      state: "output-denied";
+      input: unknown;
+      approval: {
+        id: string;
+        approved: false;
+        reason?: string;
+      };
+    };
+
+type IntermediateMessagePart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | IntermediateDynamicToolPart
+  | {
+      type: "tool-call";
+      toolUseId: string;
+      toolName?: string;
+      input?: unknown;
+    }
+  | {
+      type: "tool-result";
+      toolUseId?: string;
+      result?: unknown;
+      isError?: boolean;
+    }
+  | {
+      type: "tool-progress";
+      toolUseId: string;
+      toolName: string;
+      elapsedSeconds: number;
+    }
+  | {
+      type: "tool-summary";
+      summary: string;
+      precedingToolUseIds: string[];
+    }
+  | {
+      type: "result";
+      subtype: string;
+      isError: boolean;
+      summaryText: string;
+      metrics?: {
+        durationMs?: number;
+        durationApiMs?: number;
+        numTurns?: number;
+        totalCostUsd?: number;
+      };
+    }
+  | {
+      type: "status";
+      subtype: string;
+      data: Record<string, unknown>;
+    }
+  | {
+      type: "file-batch";
+      files: { filename: string; fileId: string }[];
+      failed: { filename: string; error: string }[];
+      processedAt?: string;
+    }
+  | {
+      type: "stream-event";
+      eventType?: string;
+      data: unknown;
+    }
+  | {
+      type: "error";
+      message: string;
+      code?: string;
+    }
+  | {
+      type: "unknown";
+      rawType: string;
+      rawSubtype?: string;
+      data: unknown;
+    };
+
+type IntermediateMessage = {
+  id: string;
+  role: AgentMessage["role"];
+  parts: IntermediateMessagePart[];
+  createdAt: string;
+  updatedAt: string;
+  metadata?: AgentMessageMetadata;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -61,21 +193,21 @@ function omitKeys(
 }
 
 function compactMetadata(
-  metadata: SessionChatMessageMetadata,
-): SessionChatMessageMetadata | undefined {
+  metadata: AgentMessageMetadata,
+): AgentMessageMetadata | undefined {
   const entries = Object.entries(metadata).filter(
     ([, value]) => value !== undefined,
   );
   if (entries.length === 0) {
     return undefined;
   }
-  return Object.fromEntries(entries) as SessionChatMessageMetadata;
+  return Object.fromEntries(entries) as AgentMessageMetadata;
 }
 
 function mergeMetadata(
-  base: SessionChatMessageMetadata,
-  extra?: SessionChatMessageMetadata,
-): SessionChatMessageMetadata | undefined {
+  base: AgentMessageMetadata,
+  extra?: AgentMessageMetadata,
+): AgentMessageMetadata | undefined {
   return compactMetadata({
     ...base,
     ...extra,
@@ -84,10 +216,10 @@ function mergeMetadata(
 
 function createMessage(
   envelope: SdkEnvelope,
-  role: SessionChatMessage["role"],
-  parts: SessionChatMessagePart[],
-  metadata?: SessionChatMessageMetadata,
-): SessionChatMessage {
+  role: AgentMessage["role"],
+  parts: IntermediateMessagePart[],
+  metadata?: AgentMessageMetadata,
+): IntermediateMessage {
   return {
     id: envelope.id,
     role,
@@ -114,9 +246,7 @@ function createMessage(
   };
 }
 
-function buildProviderMetadata(
-  envelope: SdkEnvelope,
-): SessionChatMessageMetadata {
+function buildProviderMetadata(envelope: SdkEnvelope): AgentMessageMetadata {
   const raw = envelope.message as unknown as Record<string, unknown>;
   return {
     provider: "claude-agent-sdk",
@@ -140,10 +270,10 @@ function toUiThread(thread: ClaudeChatThreadStoreRecord) {
 
 function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   envelopes: SdkEnvelope[];
-  invalidMessages: SessionChatMessage[];
+  invalidMessages: IntermediateMessage[];
 } {
   const envelopes: SdkEnvelope[] = [];
-  const invalidMessages: SessionChatMessage[] = [];
+  const invalidMessages: IntermediateMessage[] = [];
 
   for (const row of rows) {
     try {
@@ -183,12 +313,12 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   return { envelopes, invalidMessages };
 }
 
-function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
+function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
   if (!Array.isArray(blocks)) {
     return [];
   }
 
-  const parts: SessionChatMessagePart[] = [];
+  const parts: IntermediateMessagePart[] = [];
 
   for (const block of blocks) {
     if (!isRecord(block)) {
@@ -240,7 +370,7 @@ function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
 
 function normalizeMessageParamToParts(
   messageParam: unknown,
-): SessionChatMessagePart[] {
+): IntermediateMessagePart[] {
   if (typeof messageParam === "string") {
     const text = messageParam.trim();
     return text ? [{ type: "text", text }] : [];
@@ -294,7 +424,7 @@ function createDynamicToolInputPart(
   toolCallId: string,
   input: unknown,
   state: "input-available" | "input-streaming" = "input-available",
-): SessionChatDynamicToolPart {
+): IntermediateDynamicToolPart {
   return {
     type: "dynamic-tool",
     toolName,
@@ -310,7 +440,7 @@ function createDynamicToolOutputPart(
   input: unknown,
   result: unknown,
   isError: boolean,
-): SessionChatDynamicToolPart {
+): IntermediateDynamicToolPart {
   if (isError) {
     return {
       type: "dynamic-tool",
@@ -344,7 +474,7 @@ function buildResultSummaryText(
 function statusPartFromRecord(
   subtype: string,
   record: Record<string, unknown>,
-): SessionChatMessagePart {
+): IntermediateMessagePart {
   return {
     type: "status",
     subtype,
@@ -352,7 +482,7 @@ function statusPartFromRecord(
   };
 }
 
-function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
+function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
   const message = envelope.message;
   const baseMetadata = buildProviderMetadata(envelope);
 
@@ -579,19 +709,19 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
 }
 
 function synthesizeDynamicToolParts(
-  messages: SessionChatMessage[],
-): SessionChatMessage[] {
+  messages: IntermediateMessage[],
+): IntermediateMessage[] {
   type ToolRef = {
-    message: SessionChatMessage;
+    message: IntermediateMessage;
     partIndex: number;
   };
 
   const toolRefById = new Map<string, ToolRef>();
   const toolNameById = new Map<string, string>();
-  const transformed: SessionChatMessage[] = [];
+  const transformed: IntermediateMessage[] = [];
 
   for (const sourceMessage of messages) {
-    const message: SessionChatMessage = {
+    const message: IntermediateMessage = {
       ...sourceMessage,
       parts: [],
     };
@@ -679,7 +809,7 @@ function synthesizeDynamicToolParts(
   return transformed.filter((message) => message.parts.length > 0);
 }
 
-function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
+function sortMessages(messages: IntermediateMessage[]): IntermediateMessage[] {
   return [...messages].sort((a, b) => {
     if (a.createdAt === b.createdAt) {
       return a.id.localeCompare(b.id);
@@ -688,15 +818,117 @@ function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
   });
 }
 
-function toApiMessages(
-  rows: ClaudeChatRawMessageRecord[],
-): SessionChatMessage[] {
+function toAgentPart(part: IntermediateMessagePart): AgentMessagePart | null {
+  switch (part.type) {
+    case "text":
+      return part;
+    case "dynamic-tool":
+      return part;
+    case "tool-progress":
+      return {
+        type: "data-tool_progress",
+        data: {
+          toolUseId: part.toolUseId,
+          toolName: part.toolName,
+          elapsedSeconds: part.elapsedSeconds,
+        },
+      };
+    case "tool-summary":
+      return {
+        type: "data-tool_summary",
+        data: {
+          summary: part.summary,
+          precedingToolUseIds: part.precedingToolUseIds,
+        },
+      };
+    case "result":
+      return {
+        type: "data-run_result",
+        data: {
+          subtype: part.subtype,
+          isError: part.isError,
+          summaryText: part.summaryText,
+          metrics: part.metrics,
+        },
+      };
+    case "status":
+      return {
+        type: "data-status_event",
+        data: {
+          subtype: part.subtype,
+          data: part.data,
+        },
+      };
+    case "file-batch":
+      return {
+        type: "data-file_batch",
+        data: {
+          files: part.files,
+          failed: part.failed,
+          processedAt: part.processedAt,
+        },
+      };
+    case "stream-event":
+      return {
+        type: "data-stream_event",
+        data: {
+          eventType: part.eventType,
+          data: part.data,
+        },
+      };
+    case "error":
+      return {
+        type: "data-error_event",
+        data: {
+          message: part.message,
+          code: part.code,
+        },
+      };
+    case "unknown":
+      return {
+        type: "data-unknown_event",
+        data: {
+          rawType: part.rawType,
+          rawSubtype: part.rawSubtype,
+          data: part.data,
+        },
+      };
+    case "tool-call":
+    case "tool-result":
+      return null;
+    default:
+      return null;
+  }
+}
+
+function toAgentMessage(message: IntermediateMessage): AgentMessage {
+  const parts = message.parts
+    .map((part) => toAgentPart(part))
+    .filter((part): part is AgentMessagePart => part !== null);
+
+  const metadata = compactMetadata({
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    ...(message.metadata ?? {}),
+  });
+
+  return {
+    id: message.id,
+    role: message.role,
+    parts,
+    metadata,
+  };
+}
+
+function toApiMessages(rows: ClaudeChatRawMessageRecord[]): AgentMessage[] {
   const { envelopes, invalidMessages } = parseStoredSdkMessages(rows);
   const normalized = envelopes.map((envelope) =>
     normalizeSdkEnvelope(envelope),
   );
   const sorted = sortMessages([...normalized, ...invalidMessages]);
-  return synthesizeDynamicToolParts(sorted);
+  return synthesizeDynamicToolParts(sorted).map((message) =>
+    toAgentMessage(message),
+  );
 }
 
 type SubmitSessionClaudeChatUserInputInput = {
