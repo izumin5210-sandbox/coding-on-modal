@@ -16,14 +16,18 @@
 - `apps/manager-app/src/components/ui/*`: shadcn/ui components generated as dependencies for AI Elements.
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
-- `apps/manager-app/src/app/api/me/route.ts`: Authenticated user profile endpoint.
-- `apps/manager-app/src/app/api/claude-token/route.ts`: Claude API key save endpoint for authenticated users.
-- `apps/manager-app/src/app/api/sessions/*`: Session CRUD / execute / agent execution APIs.
-- `apps/manager-app/src/app/api/sessions/[id]/chat/route.ts`: Session chat history fetch and chat send APIs.
-- `apps/manager-app/src/app/api/sessions/[id]/chat/user-input/route.ts`: Submit user responses for pending Claude Agent SDK user-input requests in Session chat.
+- `apps/manager-app/src/app/api/graphql/route.ts`: GraphQL endpoint for authenticated manager operations (viewer, Session CRUD, exec, chat).
+- Legacy REST manager routes under `apps/manager-app/src/app/api/{me,claude-token,sessions/*}` remain only during migration and should be removed after GraphQL client cutover.
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
+- `apps/manager-app/src/server/graphql/context.ts`: GraphQL context creation with DB and authenticated viewer resolution.
+- `apps/manager-app/src/server/graphql/errors.ts`: Mapping of auth/domain/validation failures to GraphQL errors.
+- `apps/manager-app/src/server/graphql/scalars.ts`: GraphQL scalar definitions for `DateTime` and `JSON`.
+- `apps/manager-app/src/server/graphql/agent-message.ts`: Exported AI SDK `UIMessage` alias and typed data-part definitions for Session chat.
+- `apps/manager-app/src/server/graphql/session.ts`: GraphQL Session/Viewer query and mutation fields.
+- `apps/manager-app/src/server/graphql/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input types.
+- `apps/manager-app/src/server/graphql/index.ts`: gqlkit schema module export surface.
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
 - `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle, Session bootstrap (repository clone, GitHub credential initialization, SSH user/key bootstrap, broker startup), SSH connection metadata resolution, broker tunnel URL resolution, and execution logic.
@@ -42,11 +46,11 @@
 - `apps/manager-app/src/app/api/slack/link/route.ts`: One-time link callback for binding Slack users to app users via existing GitHub OAuth session.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
-- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions, including generalized message/parts schema for chat rendering.
+- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`.
 
 ## Responsibility Boundaries
 - UI layer: Input/output handling and user interaction orchestration.
-- API layer: HTTP boundary, validation/error handling, DB acquisition (`getDb()`), and auth guard application.
+- API layer: GraphQL boundary, validation/error handling, GraphQL context creation, and auth guard application.
 - Auth layer: OAuth callback handling, JWT issuance/verification, and user identity resolution.
 - Workflow layer: Durable orchestration of Claude chat turns via Workflow DevKit — broker SSE reading, DB persistence steps, Slack notification steps, and approval hook suspension/resumption.
 - Slack layer: Chat SDK bot for incoming event routing; Chat SDK Slack adapter for outgoing messages from workflow steps; Drizzle-based store for Slack ↔ Session/User mappings.
@@ -58,5 +62,5 @@
 
 ## Naming & Evolution Rules
 - Keep `Session` naming for new user-facing features, and confine `Sandbox` to implementation details.
-- Share JSON contracts via types in `src/lib` across UI/API.
+- Share GraphQL-facing message and helper types in `src/lib` only where they are still directly consumed by the UI; prefer schema types as the external contract.
 - For requirement changes, update `docs/product.md` first; for technical decision changes, update `docs/tech.md` first.
