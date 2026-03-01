@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
-    "graphql:gen": "gqlkit gen",
+    "graphql:gen": "pnpm graphql:gen:server && pnpm graphql:gen:client",
+    "graphql:gen:server": "gqlkit gen",
+    "graphql:gen:client": "graphql-codegen --config codegen.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -57,6 +59,10 @@
   },
   "devDependencies": {
     "@gqlkit-ts/cli": "^0.5.1",
+    "@graphql-codegen/cli": "6.1.2",
+    "@graphql-codegen/client-preset": "6.0.0-alpha-20260226131033-a969ebb287a7074d9b41d6e3af3e76b24ba462fa",
+    "@graphql-typed-document-node/core": "^3.2.0",
+    "@parcel/watcher": "^2.5.6",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",

@@ -38,26 +38,19 @@ import {
 import type {
   AgentMessage,
   AgentMessagePart,
-  GetSessionChatResponse,
   SessionChatPendingUserInput,
   SessionChatPendingUserInputAnswerValue,
 } from "@/lib/session-chat-types";
+import {
+  useSendSessionChatMessageMutation,
+  useSessionChatQuery,
+  useSubmitSessionChatUserInputMutation,
+} from "@/lib/graphql/session-chat";
 import { cn } from "@/lib/utils";
-
-type ApiError = {
-  error?: {
-    message?: string;
-  };
-};
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-}
-
-async function parseError(response: Response): Promise<string> {
-  const body = (await response.json().catch(() => null)) as ApiError | null;
-  return body?.error?.message ?? `Request failed (${response.status})`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -581,9 +574,6 @@ export default function SessionChatPageClient({
 }: {
   sessionId: string;
 }) {
-  const [data, setData] = useState<GetSessionChatResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cwd, setCwd] = useState("");
@@ -600,102 +590,67 @@ export default function SessionChatPageClient({
   const [pendingAskOtherAnswers, setPendingAskOtherAnswers] = useState<
     Record<string, string>
   >({});
+  const chatQuery = useSessionChatQuery(sessionId);
+  const sendMessageMutation = useSendSessionChatMessageMutation(sessionId);
+  const submitPendingUserInputMutation =
+    useSubmitSessionChatUserInputMutation(sessionId);
+  const data = chatQuery.data ?? null;
+  const loading = chatQuery.isPending;
+  const sending = sendMessageMutation.isPending;
+  const refreshing = chatQuery.isFetching && !chatQuery.isPending;
 
-  const refreshChat = useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (!silent) {
-        setLoading(true);
-        setError(null);
-      }
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}/chat`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
-        const body = (await response.json()) as GetSessionChatResponse;
-        setData(body);
-        setCwd(
-          (current) => current || body.thread.cwd || body.session.workspacePath,
-        );
-        setMaxTurns((current) => current || String(body.thread.maxTurns || 8));
-      } catch (loadError) {
-        if (!silent) {
-          setError(
-            loadError instanceof Error ? loadError.message : String(loadError),
-          );
-        }
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [sessionId],
-  );
-
-  const loadChat = useCallback(async () => {
-    await refreshChat();
-  }, [refreshChat]);
+  const refreshChat = useCallback(async () => {
+    setError(null);
+    await chatQuery.refetch();
+  }, [chatQuery]);
 
   const submitPrompt = useCallback(
     async (text: string) => {
-      if (!data || sending) {
-        return;
-      }
-
       const trimmedPrompt = text.trim();
       if (!trimmedPrompt) {
         throw new Error("Prompt must not be empty.");
       }
 
-      setSending(true);
       setError(null);
       setNotice(null);
 
       try {
         const maxTurnsNumber = Number(maxTurns);
-        const response = await fetch(`/api/sessions/${sessionId}/chat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            prompt: trimmedPrompt,
-            cwd: cwd.trim() || undefined,
-            maxTurns: Number.isFinite(maxTurnsNumber)
-              ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
-              : undefined,
-          }),
+        await sendMessageMutation.mutateAsync({
+          prompt: trimmedPrompt,
+          cwd: cwd.trim() || undefined,
+          maxTurns: Number.isFinite(maxTurnsNumber)
+            ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
+            : undefined,
         });
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
-
-        // Workflow started asynchronously; refresh to pick up isRunning=true so polling begins
         setNotice("Run submitted. Waiting for results...");
-        await refreshChat({ silent: true });
+        await chatQuery.refetch();
       } catch (sendError) {
         const message =
           sendError instanceof Error ? sendError.message : String(sendError);
         setError(message);
         throw sendError;
-      } finally {
-        setSending(false);
       }
     },
-    [cwd, data, maxTurns, refreshChat, sending, sessionId],
+    [chatQuery, cwd, maxTurns, sendMessageMutation],
   );
 
   useEffect(() => {
-    void loadChat();
-  }, [loadChat]);
+    if (!data) {
+      return;
+    }
+
+    setCwd(
+      (current) => current || data.thread.cwd || data.session.workspacePath,
+    );
+    setMaxTurns((current) => current || String(data.thread.maxTurns || 8));
+  }, [data]);
 
   const pendingUserInput = data?.pendingUserInput ?? null;
   const pendingToolUseId = pendingUserInput?.toolUseId ?? null;
 
   useEffect(() => {
     setPendingSubmitError(null);
-    setPendingSubmitting(false);
     if (pendingToolUseId) {
       setPendingDenyMessage("");
       setPendingAskSelections({});
@@ -718,28 +673,18 @@ export default function SessionChatPageClient({
       setPendingSubmitting(true);
       setPendingSubmitError(null);
       try {
-        const response = await fetch(
-          `/api/sessions/${sessionId}/chat/user-input`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              toolUseId: pendingUserInput.toolUseId,
-              behavior: payload.behavior,
-              answers: payload.answers,
-              message: payload.message,
-            }),
-          },
-        );
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
+        await submitPendingUserInputMutation.mutateAsync({
+          toolUseId: pendingUserInput.toolUseId,
+          behavior: payload.behavior,
+          answers: payload.answers,
+          message: payload.message,
+        });
         setNotice(
           payload.behavior === "allow"
             ? `Submitted response for ${pendingUserInput.toolName}.`
             : `Denied ${pendingUserInput.toolName}.`,
         );
-        await refreshChat({ silent: true });
+        await chatQuery.refetch();
       } catch (submitError) {
         setPendingSubmitError(
           submitError instanceof Error
@@ -750,7 +695,12 @@ export default function SessionChatPageClient({
         setPendingSubmitting(false);
       }
     },
-    [pendingSubmitting, pendingUserInput, refreshChat, sessionId],
+    [
+      chatQuery,
+      pendingSubmitting,
+      pendingUserInput,
+      submitPendingUserInputMutation,
+    ],
   );
 
   const handleApprovePendingUserInput = useCallback(async () => {
@@ -832,16 +782,6 @@ export default function SessionChatPageClient({
     [data?.messages],
   );
 
-  useEffect(() => {
-    if (!(sending || data?.thread.isRunning || pendingUserInput)) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      void refreshChat({ silent: true });
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [data?.thread.isRunning, pendingUserInput, refreshChat, sending]);
-
   const session = data?.session ?? null;
   const thread = data?.thread ?? null;
   const isSessionTerminated = session?.status === "terminated";
@@ -850,6 +790,9 @@ export default function SessionChatPageClient({
     loading || sending || isThreadRunning || isSessionTerminated;
   const submitStatus =
     inputDisabled && (sending || isThreadRunning) ? "submitted" : "ready";
+  const fetchError =
+    chatQuery.error instanceof Error ? chatQuery.error.message : null;
+  const effectiveError = error ?? fetchError;
 
   return (
     <main className="h-screen bg-[radial-gradient(circle_at_top_left,_#e0f2fe,_transparent_45%),radial-gradient(circle_at_top_right,_#fde68a,_transparent_40%),#f8fafc] p-3 sm:p-4">
@@ -908,18 +851,18 @@ export default function SessionChatPageClient({
               <button
                 type="button"
                 onClick={() => {
-                  void loadChat();
+                  void refreshChat();
                 }}
-                disabled={loading || sending}
+                disabled={refreshing || sending}
                 className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Refreshing..." : "Refresh"}
+                {refreshing ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
-          {error ? (
+          {effectiveError ? (
             <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {error}
+              {effectiveError}
             </p>
           ) : null}
           {notice ? (

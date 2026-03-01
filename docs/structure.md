@@ -12,6 +12,7 @@
 - `apps/manager-app/src/app/page.tsx`: Session list/create/execute and agent operation UI.
 - `apps/manager-app/src/app/sessions/[id]/chat/page.tsx`: Session chat page entrypoint.
 - `apps/manager-app/src/app/sessions/[id]/chat/session-chat-page-client.tsx`: Session chat UI client component.
+- `apps/manager-app/src/components/providers/query-client-provider.tsx`: TanStack Query provider mounted at the App Router root.
 - `apps/manager-app/src/components/ai-elements/*`: Vercel AI Elements components used to compose chat UI primitives.
 - `apps/manager-app/src/components/ui/*`: shadcn/ui components generated as dependencies for AI Elements.
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
@@ -45,6 +46,11 @@
 - `apps/manager-app/src/app/api/webhooks/[platform]/route.ts`: Chat SDK dynamic webhook route handler for Slack events.
 - `apps/manager-app/src/app/api/slack/link/route.ts`: One-time link callback for binding Slack users to app users via existing GitHub OAuth session.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
+- `apps/manager-app/codegen.ts`: GraphQL Code Generator config for the typed web client.
+- `apps/manager-app/src/lib/graphql/__generated__/*`: Generated typed GraphQL documents and operation result/input types for the web client.
+- `apps/manager-app/src/lib/graphql/client.ts`: Thin GraphQL fetch wrapper used by TanStack Query hooks.
+- `apps/manager-app/src/lib/graphql/operations.ts`: Co-located GraphQL operation documents for web client usage.
+- `apps/manager-app/src/lib/graphql/session-chat.ts`: Session chat query/mutation hooks plus GraphQL-to-UIMessage mapping helpers.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
 - `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`; the GraphQL layer maps from these shared types.
 

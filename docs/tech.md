@@ -4,6 +4,7 @@
 - Implement frontend/backend in `apps/manager-app` using Next.js App Router.
 - Use Modal Sandbox as the session runtime.
 - Expose authenticated manager operations through a GraphQL API at `/api/graphql`, implemented with `gqlkit` and GraphQL Yoga.
+- Consume manager GraphQL APIs from the web UI with TanStack Query and a generated typed client from GraphQL Code Generator `client-preset` (pinned to a 6.x prerelease while evaluating the upcoming major version).
 - Keep redirect/webhook-oriented endpoints (`/api/auth/*`, `/api/webhooks/*`, `/api/slack/link`) as REST handlers.
 - Manage session state in a local SQLite DB (`SESSION_DB_PATH`) through Drizzle ORM.
 
@@ -32,6 +33,7 @@
 - Derive approval hook tokens deterministically from session ID + tool use ID (`session:{sessionId}:approval:{toolUseId}`), eliminating the need for DB-persisted workflow state.
 - Resolve broker tunnel URL on-demand via Modal API (`sandbox.tunnels()`) instead of persisting it.
 - Add custom GraphQL scalars for ISO `DateTime` values and arbitrary `JSON` payloads used by chat message parts and broker state.
+- Generate client-side GraphQL documents/types from the checked-in schema file (`apps/manager-app/graphql/schema.graphql`) and use a small fetch wrapper rather than a heavier normalized-cache GraphQL client.
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
