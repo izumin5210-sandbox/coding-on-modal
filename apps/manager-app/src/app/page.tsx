@@ -326,34 +326,6 @@ export default function Home() {
     }
   }
 
-  async function deleteSession() {
-    if (!selectedId) {
-      return;
-    }
-
-    const idToDelete = selectedId;
-    setBusy("delete");
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/sessions/${idToDelete}`, {
-        method: "DELETE",
-      });
-      await ensureResponseOk(response);
-
-      setExecResult(null);
-      setMessage(`Session metadata deleted: ${idToDelete}`);
-      await loadSessions();
-    } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : String(deleteError),
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function runCommand(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -722,14 +694,6 @@ export default function Home() {
                       className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Terminate Session
-                    </button>
-                    <button
-                      type="button"
-                      onClick={deleteSession}
-                      disabled={busy !== null}
-                      className="rounded-lg bg-rose-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      Delete Metadata
                     </button>
                   </div>
                 </div>

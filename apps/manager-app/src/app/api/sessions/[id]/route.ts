@@ -3,7 +3,6 @@ import { AuthError, requireAuthenticatedUser } from "@/server/auth/session";
 import { getDb } from "@/server/db";
 import { jsonError } from "@/server/http";
 import {
-  deleteSessionRecord,
   getSessionRecord,
   SessionError,
 } from "@/server/sessions/service";
@@ -38,24 +37,3 @@ export async function GET(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(request: Request, { params }: Params) {
-  const { id } = await params;
-  const db = getDb();
-  try {
-    const user = requireAuthenticatedUser(db, request);
-    const deleted = await deleteSessionRecord(db, user.id, id);
-    if (!deleted) {
-      return jsonError(404, `Session not found: ${id}`);
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return jsonError(error.statusCode, error.message);
-    }
-    return jsonError(
-      500,
-      error instanceof Error ? error.message : "Internal error",
-    );
-  }
-}
