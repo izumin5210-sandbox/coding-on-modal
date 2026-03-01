@@ -11,11 +11,17 @@ import {
   sessionChatPendingUserInputPayloadResolveType as SessionChatPendingUserInputPayload$__resolveType,
 } from "../schema/session-chat";
 import {
+  createSession as Mutation$createSession,
+  executeSession as Mutation$executeSession,
+  terminateSession as Mutation$terminateSession,
   session as Query$session,
   sessions as Query$sessions,
   ssh as Session$ssh,
 } from "../schema/session";
-import { viewer as Query$viewer } from "../schema/viewer";
+import {
+  saveClaudeApiKey as Mutation$saveClaudeApiKey,
+  viewer as Query$viewer,
+} from "../schema/viewer";
 import type { DateTime, JsonValue } from "../schema/scalars";
 
 export function createResolvers({
@@ -84,8 +90,12 @@ export function createResolvers({
       __resolveType: AgentMessagePart$__resolveType,
     },
     Mutation: {
+      createSession: Mutation$createSession,
+      executeSession: Mutation$executeSession,
+      saveClaudeApiKey: Mutation$saveClaudeApiKey,
       sendSessionChatMessage: Mutation$sendSessionChatMessage,
       submitSessionChatUserInput: Mutation$submitSessionChatUserInput,
+      terminateSession: Mutation$terminateSession,
     },
     Query: {
       session: Query$session,

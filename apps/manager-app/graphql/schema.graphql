@@ -339,6 +339,13 @@ type Mutation
 type Query
 
 """
+Defined in: src/server/graphql/schema/viewer.ts
+"""
+type SaveClaudeApiKeyPayload {
+  claudeApiKeyConfigured: Boolean!
+}
+
+"""
 Defined in: src/server/graphql/schema/session-chat.ts
 """
 type SendSessionChatMessagePayload {
@@ -467,6 +474,15 @@ type SessionChatToolApprovalPendingRequest {
 """
 Defined in: src/server/graphql/schema/session.ts
 """
+type SessionExecResult {
+  exitCode: Int!
+  stderr: String!
+  stdout: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/session.ts
+"""
 type SessionSshInfo {
   command: String!
   host: String!
@@ -510,6 +526,32 @@ type Viewer {
 }
 
 """
+Defined in: src/server/graphql/schema/session.ts
+"""
+input CreateSessionInput {
+  name: String
+  repoRef: String
+  repoUrl: String
+}
+
+"""
+Defined in: src/server/graphql/schema/session.ts
+"""
+input ExecuteSessionInput {
+  cmd: String!
+  cwd: String
+  pty: Boolean
+  sessionId: ID!
+}
+
+"""
+Defined in: src/server/graphql/schema/viewer.ts
+"""
+input SaveClaudeApiKeyInput {
+  apiKey: String!
+}
+
+"""
 Defined in: src/server/graphql/schema/session-chat.ts
 """
 input SendSessionChatMessageInput {
@@ -538,7 +580,26 @@ input SubmitSessionChatUserInputInput {
   toolUseId: String!
 }
 
+"""
+Defined in: src/server/graphql/schema/session.ts
+"""
+input TerminateSessionInput {
+  sessionId: ID!
+}
+
 extend type Mutation {
+  """
+  Defined in: src/server/graphql/schema/session.ts
+  """
+  createSession(input: CreateSessionInput!): Session!
+  """
+  Defined in: src/server/graphql/schema/session.ts
+  """
+  executeSession(input: ExecuteSessionInput!): SessionExecResult!
+  """
+  Defined in: src/server/graphql/schema/viewer.ts
+  """
+  saveClaudeApiKey(input: SaveClaudeApiKeyInput!): SaveClaudeApiKeyPayload!
   """
   Defined in: src/server/graphql/schema/session-chat.ts
   """
@@ -551,6 +612,10 @@ extend type Mutation {
   submitSessionChatUserInput(
     input: SubmitSessionChatUserInputInput!
   ): SubmitSessionChatUserInputPayload!
+  """
+  Defined in: src/server/graphql/schema/session.ts
+  """
+  terminateSession(input: TerminateSessionInput!): Session!
 }
 
 extend type Query {

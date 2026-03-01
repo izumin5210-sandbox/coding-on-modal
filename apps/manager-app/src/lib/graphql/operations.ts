@@ -1,5 +1,113 @@
 import { graphql } from "@/lib/graphql/__generated__";
 
+export const viewerDocument = graphql(`
+  query ViewerQuery {
+    viewer {
+      claudeApiKeyConfigured
+      user {
+        id
+        github {
+          id
+          login
+          name
+          email
+          avatarUrl
+        }
+      }
+    }
+  }
+`);
+
+export const sessionsDocument = graphql(`
+  query SessionsQuery {
+    sessions {
+      id
+      name
+      repoUrl
+      repoRef
+      status
+      workspacePath
+      createdAt
+      updatedAt
+      lastError
+    }
+  }
+`);
+
+export const sessionDetailDocument = graphql(`
+  query SessionDetailQuery($id: ID!) {
+    session(id: $id) {
+      id
+      name
+      repoUrl
+      repoRef
+      status
+      workspacePath
+      createdAt
+      updatedAt
+      lastError
+      ssh {
+        user
+        host
+        port
+        hostKeyFingerprint
+        knownHostsEntry
+        command
+      }
+    }
+  }
+`);
+
+export const createSessionDocument = graphql(`
+  mutation CreateSessionMutation($input: CreateSessionInput!) {
+    createSession(input: $input) {
+      id
+      name
+      repoUrl
+      repoRef
+      status
+      workspacePath
+      createdAt
+      updatedAt
+      lastError
+    }
+  }
+`);
+
+export const saveClaudeApiKeyDocument = graphql(`
+  mutation SaveClaudeApiKeyMutation($input: SaveClaudeApiKeyInput!) {
+    saveClaudeApiKey(input: $input) {
+      claudeApiKeyConfigured
+    }
+  }
+`);
+
+export const terminateSessionDocument = graphql(`
+  mutation TerminateSessionMutation($input: TerminateSessionInput!) {
+    terminateSession(input: $input) {
+      id
+      name
+      repoUrl
+      repoRef
+      status
+      workspacePath
+      createdAt
+      updatedAt
+      lastError
+    }
+  }
+`);
+
+export const executeSessionDocument = graphql(`
+  mutation ExecuteSessionMutation($input: ExecuteSessionInput!) {
+    executeSession(input: $input) {
+      stdout
+      stderr
+      exitCode
+    }
+  }
+`);
+
 export const sessionChatPageDocument = graphql(`
   query SessionChatPageQuery($id: ID!) {
     session(id: $id) {

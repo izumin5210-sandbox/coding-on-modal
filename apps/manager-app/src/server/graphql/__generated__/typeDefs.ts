@@ -2186,6 +2186,37 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
+        value: "SaveClaudeApiKeyPayload",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "claudeApiKeyConfigured",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "Boolean",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/viewer.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
         value: "SendSessionChatMessagePayload",
       },
       fields: [
@@ -3233,6 +3264,71 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
+        value: "SessionExecResult",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "exitCode",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "Int",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "stderr",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "stdout",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/session.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
         value: "SessionSshInfo",
       },
       fields: [
@@ -3498,6 +3594,169 @@ export const typeDefs: DocumentNode = {
       kind: "InputObjectTypeDefinition",
       name: {
         kind: "Name",
+        value: "CreateSessionInput",
+      },
+      fields: [
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "name",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "String",
+            },
+          },
+        },
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "repoRef",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "String",
+            },
+          },
+        },
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "repoUrl",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "String",
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/session.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "InputObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "ExecuteSessionInput",
+      },
+      fields: [
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "cmd",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "cwd",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "String",
+            },
+          },
+        },
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "pty",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Boolean",
+            },
+          },
+        },
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "sessionId",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "ID",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/session.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "InputObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "SaveClaudeApiKeyInput",
+      },
+      fields: [
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "apiKey",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/viewer.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "InputObjectTypeDefinition",
+      name: {
+        kind: "Name",
         value: "SendSessionChatMessageInput",
       },
       fields: [
@@ -3724,12 +3983,166 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
+      kind: "InputObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "TerminateSessionInput",
+      },
+      fields: [
+        {
+          kind: "InputValueDefinition",
+          name: {
+            kind: "Name",
+            value: "sessionId",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "ID",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/session.ts",
+        block: true,
+      },
+    },
+    {
       kind: "ObjectTypeExtension",
       name: {
         kind: "Name",
         value: "Mutation",
       },
       fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "createSession",
+          },
+          arguments: [
+            {
+              kind: "InputValueDefinition",
+              name: {
+                kind: "Name",
+                value: "input",
+              },
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "CreateSessionInput",
+                  },
+                },
+              },
+            },
+          ],
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "Session",
+              },
+            },
+          },
+          description: {
+            kind: "StringValue",
+            value: "Defined in: src/server/graphql/schema/session.ts",
+            block: true,
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "executeSession",
+          },
+          arguments: [
+            {
+              kind: "InputValueDefinition",
+              name: {
+                kind: "Name",
+                value: "input",
+              },
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "ExecuteSessionInput",
+                  },
+                },
+              },
+            },
+          ],
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "SessionExecResult",
+              },
+            },
+          },
+          description: {
+            kind: "StringValue",
+            value: "Defined in: src/server/graphql/schema/session.ts",
+            block: true,
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "saveClaudeApiKey",
+          },
+          arguments: [
+            {
+              kind: "InputValueDefinition",
+              name: {
+                kind: "Name",
+                value: "input",
+              },
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "SaveClaudeApiKeyInput",
+                  },
+                },
+              },
+            },
+          ],
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "SaveClaudeApiKeyPayload",
+              },
+            },
+          },
+          description: {
+            kind: "StringValue",
+            value: "Defined in: src/server/graphql/schema/viewer.ts",
+            block: true,
+          },
+        },
         {
           kind: "FieldDefinition",
           name: {
@@ -3809,6 +4222,47 @@ export const typeDefs: DocumentNode = {
           description: {
             kind: "StringValue",
             value: "Defined in: src/server/graphql/schema/session-chat.ts",
+            block: true,
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "terminateSession",
+          },
+          arguments: [
+            {
+              kind: "InputValueDefinition",
+              name: {
+                kind: "Name",
+                value: "input",
+              },
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "TerminateSessionInput",
+                  },
+                },
+              },
+            },
+          ],
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "Session",
+              },
+            },
+          },
+          description: {
+            kind: "StringValue",
+            value: "Defined in: src/server/graphql/schema/session.ts",
             block: true,
           },
         },

@@ -26,7 +26,8 @@
 - `apps/manager-app/src/server/graphql/errors.ts`: Mapping of auth/domain/validation failures to GraphQL errors.
 - `apps/manager-app/src/server/graphql/scalars.ts`: GraphQL scalar definitions for `DateTime` and `JSON`.
 - `apps/manager-app/src/server/graphql/schema/agent-message.ts`: GraphQL object/union projection for Session chat messages derived from the shared AI SDK `UIMessage` contract.
-- `apps/manager-app/src/server/graphql/schema/session.ts`: GraphQL Session/Viewer query fields.
+- `apps/manager-app/src/server/graphql/schema/session.ts`: GraphQL Session query fields plus Session lifecycle/exec mutations.
+- `apps/manager-app/src/server/graphql/schema/viewer.ts`: GraphQL viewer query plus Claude API key save mutation.
 - `apps/manager-app/src/server/graphql/schema/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input projection types.
 - `apps/manager-app/src/server/graphql/index.ts`: gqlkit schema module export surface.
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
@@ -50,6 +51,7 @@
 - `apps/manager-app/src/lib/graphql/__generated__/*`: Generated typed GraphQL documents and operation result/input types for the web client.
 - `apps/manager-app/src/lib/graphql/client.ts`: Thin GraphQL fetch wrapper used by TanStack Query hooks.
 - `apps/manager-app/src/lib/graphql/operations.ts`: Co-located GraphQL operation documents for web client usage.
+- `apps/manager-app/src/lib/graphql/session-management.ts`: Viewer/Session list/detail hooks and GraphQL mutation wrappers for the home page.
 - `apps/manager-app/src/lib/graphql/session-chat.ts`: Session chat query/mutation hooks plus GraphQL-to-UIMessage mapping helpers.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
 - `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`; the GraphQL layer maps from these shared types.

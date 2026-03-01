@@ -34,6 +34,26 @@ export type AgentMessageRole = "ASSISTANT" | "SYSTEM" | "USER";
 /** Defined in: src/server/graphql/schema/agent-message.ts */
 export type AgentMessageTextPartState = "DONE" | "STREAMING";
 
+/** Defined in: src/server/graphql/schema/session.ts */
+export type CreateSessionInput = {
+  name?: string | null | undefined;
+  repoRef?: string | null | undefined;
+  repoUrl?: string | null | undefined;
+};
+
+/** Defined in: src/server/graphql/schema/session.ts */
+export type ExecuteSessionInput = {
+  cmd: string;
+  cwd?: string | null | undefined;
+  pty?: boolean | null | undefined;
+  sessionId: string | number;
+};
+
+/** Defined in: src/server/graphql/schema/viewer.ts */
+export type SaveClaudeApiKeyInput = {
+  apiKey: string;
+};
+
 /** Defined in: src/server/graphql/schema/session-chat.ts */
 export type SendSessionChatMessageInput = {
   cwd?: string | null | undefined;
@@ -69,6 +89,123 @@ export type SubmitSessionChatUserInputInput = {
   message?: string | null | undefined;
   sessionId: string | number;
   toolUseId: string;
+};
+
+/** Defined in: src/server/graphql/schema/session.ts */
+export type TerminateSessionInput = {
+  sessionId: string | number;
+};
+
+export type ViewerQueryQueryVariables = Exact<{ [key: string]: never }>;
+
+export type ViewerQueryQuery = {
+  viewer: {
+    claudeApiKeyConfigured: boolean;
+    user: {
+      id: string;
+      github: {
+        id: string;
+        login: string;
+        name: string | null;
+        email: string | null;
+        avatarUrl: string | null;
+      };
+    };
+  } | null;
+};
+
+export type SessionsQueryQueryVariables = Exact<{ [key: string]: never }>;
+
+export type SessionsQueryQuery = {
+  sessions: Array<{
+    id: string;
+    name: string;
+    repoUrl: string;
+    repoRef: string;
+    status: SessionStatus;
+    workspacePath: string;
+    createdAt: string;
+    updatedAt: string;
+    lastError: string | null;
+  }>;
+};
+
+export type SessionDetailQueryQueryVariables = Exact<{
+  id: string | number;
+}>;
+
+export type SessionDetailQueryQuery = {
+  session: {
+    id: string;
+    name: string;
+    repoUrl: string;
+    repoRef: string;
+    status: SessionStatus;
+    workspacePath: string;
+    createdAt: string;
+    updatedAt: string;
+    lastError: string | null;
+    ssh: {
+      user: string;
+      host: string;
+      port: number;
+      hostKeyFingerprint: string;
+      knownHostsEntry: string;
+      command: string;
+    } | null;
+  } | null;
+};
+
+export type CreateSessionMutationMutationVariables = Exact<{
+  input: CreateSessionInput;
+}>;
+
+export type CreateSessionMutationMutation = {
+  createSession: {
+    id: string;
+    name: string;
+    repoUrl: string;
+    repoRef: string;
+    status: SessionStatus;
+    workspacePath: string;
+    createdAt: string;
+    updatedAt: string;
+    lastError: string | null;
+  };
+};
+
+export type SaveClaudeApiKeyMutationMutationVariables = Exact<{
+  input: SaveClaudeApiKeyInput;
+}>;
+
+export type SaveClaudeApiKeyMutationMutation = {
+  saveClaudeApiKey: { claudeApiKeyConfigured: boolean };
+};
+
+export type TerminateSessionMutationMutationVariables = Exact<{
+  input: TerminateSessionInput;
+}>;
+
+export type TerminateSessionMutationMutation = {
+  terminateSession: {
+    id: string;
+    name: string;
+    repoUrl: string;
+    repoRef: string;
+    status: SessionStatus;
+    workspacePath: string;
+    createdAt: string;
+    updatedAt: string;
+    lastError: string | null;
+  };
+};
+
+export type ExecuteSessionMutationMutationVariables = Exact<{
+  input: ExecuteSessionInput;
+}>;
+
+export type ExecuteSessionMutationMutation = {
+  executeSession: { stdout: string; stderr: string; exitCode: number };
 };
 
 export type SessionChatPageQueryQueryVariables = Exact<{
@@ -267,6 +404,435 @@ export type SubmitSessionChatUserInputMutationMutation = {
   submitSessionChatUserInput: { ok: boolean };
 };
 
+export const ViewerQueryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ViewerQuery" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "viewer" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "claudeApiKeyConfigured" },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "user" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "github" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "id" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "login" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "name" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "email" },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "avatarUrl" },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ViewerQueryQuery, ViewerQueryQueryVariables>;
+export const SessionsQueryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionsQuery" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "repoUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "repoRef" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "workspacePath" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionsQueryQuery, SessionsQueryQueryVariables>;
+export const SessionDetailQueryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionDetailQuery" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "session" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: {
+                  kind: "Variable",
+                  name: { kind: "Name", value: "id" },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "repoUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "repoRef" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "workspacePath" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "ssh" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "user" } },
+                      { kind: "Field", name: { kind: "Name", value: "host" } },
+                      { kind: "Field", name: { kind: "Name", value: "port" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "hostKeyFingerprint" },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "knownHostsEntry" },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "command" },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionDetailQueryQuery,
+  SessionDetailQueryQueryVariables
+>;
+export const CreateSessionMutationDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateSessionMutation" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: {
+            kind: "Variable",
+            name: { kind: "Name", value: "input" },
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateSessionInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: {
+                  kind: "Variable",
+                  name: { kind: "Name", value: "input" },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "repoUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "repoRef" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "workspacePath" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateSessionMutationMutation,
+  CreateSessionMutationMutationVariables
+>;
+export const SaveClaudeApiKeyMutationDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SaveClaudeApiKeyMutation" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: {
+            kind: "Variable",
+            name: { kind: "Name", value: "input" },
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "SaveClaudeApiKeyInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "saveClaudeApiKey" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: {
+                  kind: "Variable",
+                  name: { kind: "Name", value: "input" },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "claudeApiKeyConfigured" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SaveClaudeApiKeyMutationMutation,
+  SaveClaudeApiKeyMutationMutationVariables
+>;
+export const TerminateSessionMutationDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "TerminateSessionMutation" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: {
+            kind: "Variable",
+            name: { kind: "Name", value: "input" },
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "TerminateSessionInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "terminateSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: {
+                  kind: "Variable",
+                  name: { kind: "Name", value: "input" },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "repoUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "repoRef" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "workspacePath" },
+                },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  TerminateSessionMutationMutation,
+  TerminateSessionMutationMutationVariables
+>;
+export const ExecuteSessionMutationDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ExecuteSessionMutation" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: {
+            kind: "Variable",
+            name: { kind: "Name", value: "input" },
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "ExecuteSessionInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "executeSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: {
+                  kind: "Variable",
+                  name: { kind: "Name", value: "input" },
+                },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "stdout" } },
+                { kind: "Field", name: { kind: "Name", value: "stderr" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ExecuteSessionMutationMutation,
+  ExecuteSessionMutationMutationVariables
+>;
 export const SessionChatPageQueryDocument = {
   kind: "Document",
   definitions: [
