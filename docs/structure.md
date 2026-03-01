@@ -24,9 +24,9 @@
 - `apps/manager-app/src/server/graphql/context.ts`: GraphQL context creation with DB and authenticated viewer resolution.
 - `apps/manager-app/src/server/graphql/errors.ts`: Mapping of auth/domain/validation failures to GraphQL errors.
 - `apps/manager-app/src/server/graphql/scalars.ts`: GraphQL scalar definitions for `DateTime` and `JSON`.
-- `apps/manager-app/src/server/graphql/agent-message.ts`: Exported AI SDK `UIMessage` alias and typed data-part definitions for Session chat.
-- `apps/manager-app/src/server/graphql/session.ts`: GraphQL Session/Viewer query and mutation fields.
-- `apps/manager-app/src/server/graphql/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input types.
+- `apps/manager-app/src/server/graphql/schema/agent-message.ts`: GraphQL object/union projection for Session chat messages derived from the shared AI SDK `UIMessage` contract.
+- `apps/manager-app/src/server/graphql/schema/session.ts`: GraphQL Session/Viewer query fields.
+- `apps/manager-app/src/server/graphql/schema/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input projection types.
 - `apps/manager-app/src/server/graphql/index.ts`: gqlkit schema module export surface.
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
@@ -46,7 +46,7 @@
 - `apps/manager-app/src/app/api/slack/link/route.ts`: One-time link callback for binding Slack users to app users via existing GitHub OAuth session.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
-- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`.
+- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`; the GraphQL layer maps from these shared types.
 
 ## Responsibility Boundaries
 - UI layer: Input/output handling and user interaction orchestration.

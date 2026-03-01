@@ -5,6 +5,317 @@ scalar DateTime
 scalar JSON
 
 """
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessage {
+  id: ID!
+  metadata: AgentMessageMetadata
+  parts: [AgentMessagePart!]!
+  role: AgentMessageRole!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageDynamicToolPart {
+  approval: AgentMessageDynamicToolPartApproval
+  errorText: String
+  input: JSON
+  output: JSON
+  preliminary: Boolean
+  providerExecuted: Boolean
+  state: AgentMessageDynamicToolPartState!
+  title: String
+  toolCallId: String!
+  toolName: String!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageDynamicToolPartApproval {
+  approved: Boolean
+  id: String!
+  reason: String
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageDynamicToolPartState {
+  INPUT_STREAMING
+  INPUT_AVAILABLE
+  APPROVAL_REQUESTED
+  APPROVAL_RESPONDED
+  OUTPUT_AVAILABLE
+  OUTPUT_ERROR
+  OUTPUT_DENIED
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageErrorEventPart {
+  data: AgentMessageErrorEventPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageErrorEventPartData {
+  code: String
+  message: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageFileBatchFailure {
+  error: String!
+  filename: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageFileBatchFile {
+  fileId: String!
+  filename: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageFileBatchPart {
+  data: AgentMessageFileBatchPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageFileBatchPartData {
+  failed: [AgentMessageFileBatchFailure!]!
+  files: [AgentMessageFileBatchFile!]!
+  processedAt: DateTime
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageMetadata {
+  createdAt: DateTime
+  isReplay: Boolean
+  isSynthetic: Boolean
+  label: String
+  parentToolUseId: String
+  provider: AgentMessageProvider
+  providerMessageType: String
+  providerSessionId: String
+  providerSubtype: String
+  providerUuid: String
+  rawStoredMessageId: String
+  status: AgentMessageMetadataStatus
+  updatedAt: DateTime
+  visibility: AgentMessageMetadataVisibility
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageMetadataStatus {
+  ERROR
+  IN_PROGRESS
+  DONE
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageMetadataVisibility {
+  DEFAULT
+  TRACE
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+union AgentMessagePart =
+  | AgentMessageDynamicToolPart
+  | AgentMessageErrorEventPart
+  | AgentMessageFileBatchPart
+  | AgentMessageReasoningPart
+  | AgentMessageRunResultPart
+  | AgentMessageStatusEventPart
+  | AgentMessageStreamEventPart
+  | AgentMessageTextPart
+  | AgentMessageToolProgressPart
+  | AgentMessageToolSummaryPart
+  | AgentMessageUnknownEventPart
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageProvider {
+  CLAUDE_AGENT_SDK
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageReasoningPart {
+  state: AgentMessageReasoningPartState
+  text: String!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageReasoningPartState {
+  DONE
+  STREAMING
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageRunResultPart {
+  data: AgentMessageRunResultPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageRunResultPartData {
+  isError: Boolean!
+  metrics: AgentMessageRunResultPartDataMetrics
+  subtype: String!
+  summaryText: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageRunResultPartDataMetrics {
+  durationApiMs: Float
+  durationMs: Float
+  numTurns: Float
+  totalCostUsd: Float
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageStatusEventPart {
+  data: AgentMessageStatusEventPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageStatusEventPartData {
+  data: JSON!
+  subtype: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageStreamEventPart {
+  data: AgentMessageStreamEventPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageStreamEventPartData {
+  data: JSON!
+  eventType: String
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageTextPart {
+  state: AgentMessageTextPartState
+  text: String!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageTextPartState {
+  DONE
+  STREAMING
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageToolProgressPart {
+  data: AgentMessageToolProgressPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageToolProgressPartData {
+  elapsedSeconds: Float!
+  toolName: String!
+  toolUseId: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageToolSummaryPart {
+  data: AgentMessageToolSummaryPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageToolSummaryPartData {
+  precedingToolUseIds: [String!]!
+  summary: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageUnknownEventPart {
+  data: AgentMessageUnknownEventPartData!
+  type: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageUnknownEventPartData {
+  data: JSON!
+  rawSubtype: String
+  rawType: String!
+}
+
+"""
 Defined in: src/server/graphql/schema/viewer.ts
 """
 type AuthUser {
@@ -23,7 +334,23 @@ type GithubAccount {
   name: String
 }
 
+type Mutation
+
 type Query
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SendSessionChatMessagePayload {
+  status: SendSessionChatMessageStatus!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+enum SendSessionChatMessageStatus {
+  SUBMITTED
+}
 
 """
 Defined in: src/server/graphql/schema/session.ts
@@ -38,6 +365,103 @@ type Session {
   status: SessionStatus!
   updatedAt: DateTime!
   workspacePath: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChat {
+  messages: [AgentMessage!]!
+  rawCount: Int!
+  thread: SessionChatThread!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChatAskUserQuestionPendingRequest {
+  agentId: String
+  blockedPath: String
+  createdAt: DateTime!
+  decisionReason: String
+  input: JSON!
+  kind: SessionChatPendingRequestKind!
+  questions: [SessionChatPendingUserInputQuestion!]!
+  requestId: String!
+  suggestions: [JSON!]
+  toolName: String!
+  toolUseId: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+union SessionChatPendingRequest =
+  | SessionChatAskUserQuestionPendingRequest
+  | SessionChatToolApprovalPendingRequest
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+enum SessionChatPendingRequestKind {
+  ASK_USER_QUESTION
+  TOOL_APPROVAL
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+union SessionChatPendingUserInputPayload =
+  | SessionChatAskUserQuestionPendingRequest
+  | SessionChatToolApprovalPendingRequest
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChatPendingUserInputQuestion {
+  header: String!
+  multiSelect: Boolean!
+  options: [SessionChatPendingUserInputQuestionOption!]!
+  question: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChatPendingUserInputQuestionOption {
+  description: String!
+  label: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChatThread {
+  claudeSdkSessionId: String
+  createdAt: DateTime!
+  cwd: String!
+  id: ID!
+  isRunning: Boolean!
+  lastError: String
+  maxTurns: Int!
+  sessionId: ID!
+  updatedAt: DateTime!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SessionChatToolApprovalPendingRequest {
+  agentId: String
+  blockedPath: String
+  createdAt: DateTime!
+  decisionReason: String
+  input: JSON!
+  kind: SessionChatPendingRequestKind!
+  requestId: String!
+  suggestions: [JSON!]
+  toolName: String!
+  toolUseId: String!
 }
 
 """
@@ -63,11 +487,70 @@ enum SessionStatus {
 }
 
 """
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+enum SubmitSessionChatUserInputBehaviorInput {
+  ALLOW
+  DENY
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+type SubmitSessionChatUserInputPayload {
+  ok: Boolean!
+}
+
+"""
 Defined in: src/server/graphql/schema/viewer.ts
 """
 type Viewer {
   claudeApiKeyConfigured: Boolean!
   user: AuthUser!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+input SendSessionChatMessageInput {
+  cwd: String
+  maxTurns: Int
+  prompt: String!
+  sessionId: ID!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+input SubmitSessionChatUserInputAnswerInput {
+  key: String!
+  values: [String!]!
+}
+
+"""
+Defined in: src/server/graphql/schema/session-chat.ts
+"""
+input SubmitSessionChatUserInputInput {
+  answers: [SubmitSessionChatUserInputAnswerInput!]
+  behavior: SubmitSessionChatUserInputBehaviorInput!
+  message: String
+  sessionId: ID!
+  toolUseId: String!
+}
+
+extend type Mutation {
+  """
+  Defined in: src/server/graphql/schema/session-chat.ts
+  """
+  sendSessionChatMessage(
+    input: SendSessionChatMessageInput!
+  ): SendSessionChatMessagePayload!
+  """
+  Defined in: src/server/graphql/schema/session-chat.ts
+  """
+  submitSessionChatUserInput(
+    input: SubmitSessionChatUserInputInput!
+  ): SubmitSessionChatUserInputPayload!
 }
 
 extend type Query {
@@ -87,7 +570,18 @@ extend type Query {
 
 extend type Session {
   """
+  Defined in: src/server/graphql/schema/session-chat.ts
+  """
+  chat: SessionChat!
+  """
   Defined in: src/server/graphql/schema/session.ts
   """
   ssh: SessionSshInfo
+}
+
+extend type SessionChat {
+  """
+  Defined in: src/server/graphql/schema/session-chat.ts
+  """
+  pendingUserInput: SessionChatPendingUserInputPayload
 }

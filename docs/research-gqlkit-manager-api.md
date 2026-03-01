@@ -86,7 +86,7 @@ type SessionChat {
   thread: SessionChatThread!
   messages: [AgentMessage!]!
   rawCount: Int!
-  pendingUserInput: SessionChatPendingUserInput
+  pendingUserInput: SessionChatPendingUserInputPayload
 }
 ```
 
@@ -219,17 +219,18 @@ apps/manager-app/src/app/api/graphql/route.ts
 apps/manager-app/src/server/graphql/context.ts
 apps/manager-app/src/server/graphql/errors.ts
 apps/manager-app/src/server/graphql/scalars.ts
-apps/manager-app/src/server/graphql/viewer.ts
-apps/manager-app/src/server/graphql/session.ts
-apps/manager-app/src/server/graphql/session-chat.ts
-apps/manager-app/src/server/graphql/agent-message.ts
+apps/manager-app/src/server/graphql/schema/viewer.ts
+apps/manager-app/src/server/graphql/schema/session.ts
+apps/manager-app/src/server/graphql/schema/session-chat.ts
+apps/manager-app/src/server/graphql/schema/agent-message.ts
 apps/manager-app/src/server/graphql/index.ts
 apps/manager-app/graphql/schema.graphql
 ```
 
 Notes:
 - `route.ts` hosts Yoga and creates the gqlkit schema.
-- `agent-message.ts` owns the exported `UIMessage` alias and the typed `data-*` payloads.
+- `src/lib/session-chat-types.ts` owns the exported `UIMessage` alias and the typed `data-*` payloads.
+- `schema/agent-message.ts` maps the shared chat message contract into GraphQL object and union types.
 - Existing REST route handlers should be removed only after the UI is switched over.
 
 ## Migration Plan
