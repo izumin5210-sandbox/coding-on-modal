@@ -8,6 +8,9 @@ const config: CodegenConfig = {
     "!src/server/graphql/**",
   ],
   ignoreNoDocuments: false,
+  hooks: {
+    afterAllFileWrite: ["pnpm exec biome format --write src/lib/graphql/__generated__"],
+  },
   generates: {
     "./src/lib/graphql/__generated__/": {
       preset: "client",
