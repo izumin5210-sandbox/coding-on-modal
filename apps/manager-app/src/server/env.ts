@@ -55,6 +55,12 @@ const envSchema = z.object({
     .default(30),
   AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(20).default(8),
   SESSION_DB_PATH: z.string().optional(),
+
+  // Slack integration
+  SLACK_BOT_TOKEN: z.string().min(1, "SLACK_BOT_TOKEN is required"),
+  SLACK_SIGNING_SECRET: z.string().min(1, "SLACK_SIGNING_SECRET is required"),
+  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
+  SLACK_LINK_BASE_URL: z.string().url().optional(),
 });
 
 type RuntimeEnv = z.infer<typeof envSchema> & {

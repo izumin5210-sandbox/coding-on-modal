@@ -14,11 +14,16 @@ TOKEN_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
 GITHUB_CLIENT_ID=Iv1...
 GITHUB_CLIENT_SECRET=...
 GITHUB_OAUTH_CALLBACK_URL=http://localhost:3000/api/auth/github/callback
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=...
+REDIS_URL=redis://localhost:6379
 ```
 
 - `TOKEN_ENCRYPTION_KEY` must be base64 encoded 32-byte key.
 - `GITHUB_OAUTH_CALLBACK_URL` must match your GitHub OAuth App settings.
 - Claude API key is configured per user from the UI modal and stored encrypted in DB.
+- `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` come from your Slack app configuration.
+- `REDIS_URL` is used by Chat SDK for Slack thread subscription state management.
 
 Generate secrets locally:
 
@@ -37,6 +42,7 @@ SANDBOX_TIMEOUT_MINUTES=60
 SANDBOX_IDLE_TIMEOUT_MINUTES=30
 AGENT_MAX_TURNS=8
 SESSION_DB_PATH=apps/manager-app/data/manager.db
+SLACK_LINK_BASE_URL=https://your-app.example.com
 ```
 
 Session image includes `git`, `gh`, `curl`, `openssh-server`, `sudo`, and Claude Code CLI (`claude`) pinned to `2.1.29` (auto-update disabled).
@@ -86,3 +92,19 @@ Open `http://localhost:3000`.
 - `github_credentials`: encrypted GitHub OAuth credentials linked 1:1 to `github_accounts`.
 - `claude_credentials`: encrypted Claude API key linked 1:1 to `users`.
 - `sessions.owner_user_id`: owner isolation for all Session operations.
+- `slack_thread_sessions`: maps Slack thread (team + channel + thread_ts) to a Session.
+- `slack_user_mappings`: maps Slack user to app user (linked via one-time URL).
+- `slack_link_tokens`: one-time tokens for the Slack user linking flow.
+
+## Slack integration
+
+Mentioning the bot in a Slack channel creates a new Session and starts an agent run. All subsequent messages in that Slack thread are routed to the same Session.
+
+1. Set up a Slack app with Bot Token Scopes: `app_mentions:read`, `channels:history`, `groups:history`, `chat:write`, `im:write`.
+2. Enable Event Subscriptions and point the Request URL to `https://<host>/api/webhooks/slack`.
+3. Subscribe to bot events: `app_mention`, `message.channels`, `message.groups`, `message.im`.
+4. Enable Interactivity and point the Request URL to `https://<host>/api/webhooks/slack`.
+5. Set `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, and `REDIS_URL` in your environment.
+6. Run `pnpm --filter manager-app db:migrate` to apply the Slack tables migration.
+
+Users link their Slack account to their app account via a one-time URL sent as an ephemeral message on first mention.

@@ -34,8 +34,14 @@
 - Cross-account usage based on shared billing or shared contracts.
 - Public offering as a general-purpose PaaS.
 
+## Slack Integration
+- Slack channel mentions create a new Session and start an agent run; all subsequent messages in the Slack thread are routed to that Session.
+- The durable workflow posts agent responses and approval prompts directly to the linked Slack thread after persisting messages.
+- Interactive buttons (Allow / Deny) in Slack handle tool-approval and user-feedback flows.
+- Slack users are linked to app users via a one-time ephemeral link URL (existing GitHub OAuth session required).
+
 ## Roadmap Direction
 - Add explicit session revoke controls and audit trails for authentication events.
 - Strengthen long-term credential lifecycle management (token refresh/retry and alerting).
-- Expand coding-agent interaction channels beyond Web UI to external chat platforms such as Slack.
+- Resume existing Sessions from Slack (currently each mention creates a new Session).
 - Improve SSH operations with key rotation/re-sync workflows and auditability enhancements.

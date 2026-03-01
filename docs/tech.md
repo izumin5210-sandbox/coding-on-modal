@@ -17,7 +17,10 @@
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
 - Include baseline CLI utilities in the Session image (for example, `curl`) and install `sudo`.
 - Preinstall Claude Code CLI in the Session image and pin it to a known-good version (`2.1.29`) while disabling auto-update to avoid TUI regressions from newer releases; pin the manager-side Claude Agent SDK to the matching compatible version (`@anthropic-ai/claude-agent-sdk@0.2.29`) and keep a matching SDK package in the Session image only as the spawned Claude process entrypoint (`cli.js`) for remote execution.
-- In the future, enable the same agent execution foundation to be called from non-Web channels (for example, Slack).
+- Slack integration uses Chat SDK (`chat` + `@chat-adapter/slack`) for incoming webhook handling and Redis (`@chat-adapter/state-redis`) for thread subscription state. Outgoing messages from the workflow use the Chat SDK Slack adapter (`getBot().getAdapter('slack')`) to keep all Slack API access centralised through the Chat SDK abstraction layer.
+- The durable workflow (`sessionChatTurnWorkflow`) includes a `notifySlack` step after each `persistMessages` call: it checks for a `slack_thread_sessions` mapping by session ID and posts SDK messages / approval cards to the linked Slack thread.
+- Session creation from Slack reuses the existing `createSession()` and `sendSessionClaudeChatMessage()` service functions — Slack is an alternative input channel, not a parallel implementation.
+- Slack user ↔ app user binding uses a one-time link token flow: the bot sends an ephemeral message with a URL; the user authenticates via existing GitHub OAuth and the mapping is stored in `slack_user_mappings`.
 - Persist Claude Code chat transcripts server-side in SQLite as raw Claude Agent SDK `SDKMessage` JSON records, with UI-oriented shaping performed at read time.
 - Return Session chat messages from the API in a generalized `role + parts[] + metadata` schema (inspired by Vercel AI SDK `UIMessage`) instead of exposing Claude Agent SDK transport message shapes directly.
 - Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts (stateful `input-*` / `output-*`) and synthesize them from raw Claude SDK transcript events by `toolUseId` so the Web UI renders a single coherent tool card per invocation.
@@ -56,6 +59,6 @@
 - Add explicit JWT revoke/session invalidation mechanism when immediate logout invalidation is required.
 - Add GitHub OAuth token refresh flow and recovery handling for expired credentials.
 - Add retention policy for audit logs and execution history.
-- Decouple agent execution APIs from chat input channels to support channel expansion.
 - Add host key rotation and key re-sync controls for long-running Sessions.
 - Define migration automation strategy for deployment environments.
+- Add Slack `ask-user-question` modal flow (currently only Allow/Deny buttons are supported).

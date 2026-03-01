@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.29",
+    "@chat-adapter/slack": "^4.14.0",
+    "@chat-adapter/state-redis": "^4.14.0",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@rive-app/react-webgl2": "^4.27.0",
     "@streamdown/cjk": "^1.0.2",
@@ -23,6 +25,7 @@
     "ai": "^6.0.97",
     "ansi-to-react": "^6.2.6",
     "better-sqlite3": "^12.6.2",
+    "chat": "^4.14.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

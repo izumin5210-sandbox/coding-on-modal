@@ -35,6 +35,11 @@
 - `apps/manager-app/src/server/sessions/broker/claude-session-broker.ts`: TypeScript reference types for the broker HTTP server running inside Modal sandbox.
 - `apps/manager-app/src/server/sessions/broker/broker-script.ts`: Embeddable CJS JavaScript for the sandbox broker — HTTP server (port 8765) with Claude Agent SDK V1 `query()`, SSE streaming, and user-feedback tool interception.
 - `apps/manager-app/src/server/modal/*`: Modal session image and launch configuration.
+- `apps/manager-app/src/server/slack/bot.ts`: Chat SDK bot instance (Slack adapter + Redis state) with event handlers for mentions, subscribed messages, and `onAction` handlers for approval button actions (Allow / Deny).
+- `apps/manager-app/src/server/slack/store.ts`: Drizzle-based CRUD for Slack thread ↔ Session mapping, Slack user ↔ app user mapping, and one-time link tokens.
+- `apps/manager-app/src/server/slack/notifier.ts`: Posts messages and approval cards to Slack threads from workflow steps using the Chat SDK Slack adapter. Extracts Slack-postable content directly from raw SDK messages.
+- `apps/manager-app/src/app/api/webhooks/[platform]/route.ts`: Chat SDK dynamic webhook route handler for Slack events.
+- `apps/manager-app/src/app/api/slack/link/route.ts`: One-time link callback for binding Slack users to app users via existing GitHub OAuth session.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
 - `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions, including generalized message/parts schema for chat rendering.
@@ -43,7 +48,8 @@
 - UI layer: Input/output handling and user interaction orchestration.
 - API layer: HTTP boundary, validation/error handling, DB acquisition (`getDb()`), and auth guard application.
 - Auth layer: OAuth callback handling, JWT issuance/verification, and user identity resolution.
-- Workflow layer: Durable orchestration of Claude chat turns via Workflow DevKit — broker SSE reading, DB persistence steps, and approval hook suspension/resumption.
+- Workflow layer: Durable orchestration of Claude chat turns via Workflow DevKit — broker SSE reading, DB persistence steps, Slack notification steps, and approval hook suspension/resumption.
+- Slack layer: Chat SDK bot for incoming event routing; Chat SDK Slack adapter for outgoing messages from workflow steps; Drizzle-based store for Slack ↔ Session/User mappings.
 - Broker layer: In-sandbox HTTP server executing Claude Agent SDK V1 `query()` locally, SSE streaming results to workflow, and managing user-feedback tool interception state.
 - Service layer: Session state transitions, GitHub credential + SSH bootstrap inside Session runtime, broker startup, Session detail SSH metadata resolution, and orchestration of Modal/agent operations.
 - Store layer: DB reads/writes via Drizzle with explicit `db` injection and owner-scoped access patterns.

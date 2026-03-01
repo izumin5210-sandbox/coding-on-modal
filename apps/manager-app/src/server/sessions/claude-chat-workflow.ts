@@ -19,6 +19,11 @@ import {
   updateClaudeChatThread,
 } from "@/server/sessions/claude-chat-store";
 import { resolveBrokerTunnelUrl } from "@/server/sessions/service";
+import {
+  postPendingInputToSlack,
+  postSdkMessagesToSlack,
+} from "@/server/slack/notifier";
+import { getSlackThreadSessionBySessionId } from "@/server/slack/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -227,6 +232,37 @@ async function releaseThreadLock(threadId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Slack notification step — posts to linked Slack thread if one exists
+// ---------------------------------------------------------------------------
+
+async function notifySlack(
+  sessionId: string,
+  messages: SDKMessage[],
+  permissionInfo?: Record<string, unknown>,
+): Promise<void> {
+  "use step";
+
+  const db = getDb();
+  const slackThread = getSlackThreadSessionBySessionId(db, sessionId);
+  if (!slackThread) return;
+
+  const { slackChannelId, slackThreadTs } = slackThread;
+
+  if (messages.length > 0) {
+    await postSdkMessagesToSlack(slackChannelId, slackThreadTs, messages);
+  }
+
+  if (permissionInfo) {
+    await postPendingInputToSlack(
+      slackChannelId,
+      slackThreadTs,
+      permissionInfo,
+      sessionId,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Workflow: one turn of Claude chat
 // ---------------------------------------------------------------------------
 
@@ -267,6 +303,13 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
       result.type === "error" ? result.error : undefined,
     );
 
+    // Notify linked Slack thread (if any)
+    await notifySlack(
+      params.sessionId,
+      result.messages,
+      result.type === "permission_request" ? result.pendingInfo : undefined,
+    );
+
     // Approval loop
     while (result.type === "permission_request") {
       const token = approvalHookToken(params.sessionId, result.toolUseId);
@@ -289,6 +332,13 @@ export async function sessionChatTurnWorkflow(params: WorkflowParams) {
         params.maxTurns,
         result.type === "error",
         result.type === "error" ? result.error : undefined,
+      );
+
+      // Notify linked Slack thread (if any)
+      await notifySlack(
+        params.sessionId,
+        result.messages,
+        result.type === "permission_request" ? result.pendingInfo : undefined,
       );
     }
   } finally {
