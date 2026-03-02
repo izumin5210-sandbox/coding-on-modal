@@ -1,0 +1,17 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.2/schema.json",
+  "root": false,
+  "extends": ["./biome.jsonc"],
+  "files": {
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!src/components/ai-elements",
+      "!src/components/ui",
+      "!src/lib/graphql/__generated__"
+    ]
+  }
+}
