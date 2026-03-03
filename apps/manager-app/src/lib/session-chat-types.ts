@@ -10,6 +10,53 @@ export type AgentRunMetrics = {
   totalCostUsd?: number;
 };
 
+export type AgentRunResultData = {
+  subtype: string;
+  isError: boolean;
+  summaryText: string;
+  metrics?: AgentRunMetrics;
+};
+
+export type AgentMessageEventData =
+  | {
+      kind: "tool-progress";
+      toolUseId: string;
+      toolName: string;
+      elapsedSeconds: number;
+    }
+  | {
+      kind: "tool-summary";
+      summary: string;
+      precedingToolUseIds: string[];
+    }
+  | {
+      kind: "status";
+      subtype: string;
+      data: Record<string, unknown>;
+    }
+  | {
+      kind: "file-batch";
+      files: { filename: string; fileId: string }[];
+      failed: { filename: string; error: string }[];
+      processedAt?: string;
+    }
+  | {
+      kind: "stream";
+      eventType?: string;
+      data: unknown;
+    }
+  | {
+      kind: "error";
+      message: string;
+      code?: string;
+    }
+  | {
+      kind: "unknown";
+      rawType: string;
+      rawSubtype?: string;
+      data: unknown;
+    };
+
 export type AgentMessageMetadata = {
   createdAt?: string;
   updatedAt?: string;
@@ -28,49 +75,15 @@ export type AgentMessageMetadata = {
 };
 
 export type AgentMessageData = {
-  tool_progress: {
-    toolUseId: string;
-    toolName: string;
-    elapsedSeconds: number;
-  };
-  tool_summary: {
-    summary: string;
-    precedingToolUseIds: string[];
-  };
-  run_result: {
-    subtype: string;
-    isError: boolean;
-    summaryText: string;
-    metrics?: AgentRunMetrics;
-  };
-  status_event: {
-    subtype: string;
-    data: Record<string, unknown>;
-  };
-  file_batch: {
-    files: { filename: string; fileId: string }[];
-    failed: { filename: string; error: string }[];
-    processedAt?: string;
-  };
-  stream_event: {
-    eventType?: string;
-    data: unknown;
-  };
-  error_event: {
-    message: string;
-    code?: string;
-  };
-  unknown_event: {
-    rawType: string;
-    rawSubtype?: string;
-    data: unknown;
-  };
+  event: AgentMessageEventData;
+  result: AgentRunResultData;
 };
 
 export type AgentMessage = UIMessage<
   AgentMessageMetadata,
   AgentMessageData,
-  Record<never, never>
+  // biome-ignore lint/complexity/noBannedTypes: public contract should stay UIMessage<..., ..., {}>
+  {}
 >;
 
 export type AgentMessagePart = AgentMessage["parts"][number];
@@ -79,6 +92,10 @@ export type AgentDataPart<TKey extends keyof AgentMessageData> = Extract<
   AgentMessagePart,
   { type: `data-${TKey}` }
 >;
+
+export type AgentEventPart = AgentDataPart<"event">;
+
+export type AgentResultPart = AgentDataPart<"result">;
 
 export type SessionChatPendingUserInputQuestion = {
   header: string;

@@ -17,6 +17,16 @@ export type AgentMessageDynamicToolPartState =
   | "OUTPUT_ERROR";
 
 /** Defined in: src/server/graphql/schema/agent-message.ts */
+export type AgentMessageEventKind =
+  | "ERROR"
+  | "FILE_BATCH"
+  | "STATUS"
+  | "STREAM"
+  | "TOOL_PROGRESS"
+  | "TOOL_SUMMARY"
+  | "UNKNOWN";
+
+/** Defined in: src/server/graphql/schema/agent-message.ts */
 export type AgentMessageMetadataStatus = "DONE" | "ERROR" | "IN_PROGRESS";
 
 /** Defined in: src/server/graphql/schema/agent-message.ts */
@@ -309,18 +319,54 @@ export type SessionChatPageQueryQuery = {
               } | null;
             }
           | {
-              __typename: "AgentMessageErrorEventPart";
+              __typename: "AgentMessageEventPart";
               type: string;
-              data: { message: string; code: string | null };
-            }
-          | {
-              __typename: "AgentMessageFileBatchPart";
-              type: string;
-              data: {
-                processedAt: string | null;
-                files: Array<{ filename: string; fileId: string }>;
-                failed: Array<{ filename: string; error: string }>;
-              };
+              data:
+                | {
+                    __typename: "AgentMessageErrorEvent";
+                    kind: AgentMessageEventKind;
+                    message: string;
+                    code: string | null;
+                  }
+                | {
+                    __typename: "AgentMessageFileBatchEvent";
+                    kind: AgentMessageEventKind;
+                    processedAt: string | null;
+                    files: Array<{ filename: string; fileId: string }>;
+                    failed: Array<{ filename: string; error: string }>;
+                  }
+                | {
+                    __typename: "AgentMessageStatusEvent";
+                    kind: AgentMessageEventKind;
+                    subtype: string;
+                    data: unknown;
+                  }
+                | {
+                    __typename: "AgentMessageStreamEvent";
+                    kind: AgentMessageEventKind;
+                    eventType: string | null;
+                    data: unknown;
+                  }
+                | {
+                    __typename: "AgentMessageToolProgressEvent";
+                    kind: AgentMessageEventKind;
+                    toolUseId: string;
+                    toolName: string;
+                    elapsedSeconds: number;
+                  }
+                | {
+                    __typename: "AgentMessageToolSummaryEvent";
+                    kind: AgentMessageEventKind;
+                    summary: string;
+                    precedingToolUseIds: Array<string>;
+                  }
+                | {
+                    __typename: "AgentMessageUnknownEvent";
+                    kind: AgentMessageEventKind;
+                    rawType: string;
+                    rawSubtype: string | null;
+                    data: unknown;
+                  };
             }
           | {
               __typename: "AgentMessageReasoningPart";
@@ -329,7 +375,7 @@ export type SessionChatPageQueryQuery = {
               reasoningState: AgentMessageReasoningPartState | null;
             }
           | {
-              __typename: "AgentMessageRunResultPart";
+              __typename: "AgentMessageResultPart";
               type: string;
               data: {
                 subtype: string;
@@ -344,43 +390,10 @@ export type SessionChatPageQueryQuery = {
               };
             }
           | {
-              __typename: "AgentMessageStatusEventPart";
-              type: string;
-              data: { subtype: string; data: unknown };
-            }
-          | {
-              __typename: "AgentMessageStreamEventPart";
-              type: string;
-              data: { eventType: string | null; data: unknown };
-            }
-          | {
               __typename: "AgentMessageTextPart";
               type: string;
               text: string;
               textState: AgentMessageTextPartState | null;
-            }
-          | {
-              __typename: "AgentMessageToolProgressPart";
-              type: string;
-              data: {
-                toolUseId: string;
-                toolName: string;
-                elapsedSeconds: number;
-              };
-            }
-          | {
-              __typename: "AgentMessageToolSummaryPart";
-              type: string;
-              data: { summary: string; precedingToolUseIds: Array<string> };
-            }
-          | {
-              __typename: "AgentMessageUnknownEventPart";
-              type: string;
-              data: {
-                rawType: string;
-                rawSubtype: string | null;
-                data: unknown;
-              };
             }
         >;
       }>;
@@ -1441,7 +1454,7 @@ export const SessionChatPageQueryDocument = {
                                       kind: "NamedType",
                                       name: {
                                         kind: "Name",
-                                        value: "AgentMessageToolProgressPart",
+                                        value: "AgentMessageEventPart",
                                       },
                                     },
                                     selectionSet: {
@@ -1461,21 +1474,326 @@ export const SessionChatPageQueryDocument = {
                                                 kind: "Field",
                                                 name: {
                                                   kind: "Name",
-                                                  value: "toolUseId",
+                                                  value: "__typename",
                                                 },
                                               },
                                               {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "toolName",
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageToolProgressEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "toolUseId",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "toolName",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "elapsedSeconds",
+                                                      },
+                                                    },
+                                                  ],
                                                 },
                                               },
                                               {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "elapsedSeconds",
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageToolSummaryEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "summary",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value:
+                                                          "precedingToolUseIds",
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageStatusEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "subtype",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "data",
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageFileBatchEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "processedAt",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "files",
+                                                      },
+                                                      selectionSet: {
+                                                        kind: "SelectionSet",
+                                                        selections: [
+                                                          {
+                                                            kind: "Field",
+                                                            name: {
+                                                              kind: "Name",
+                                                              value: "filename",
+                                                            },
+                                                          },
+                                                          {
+                                                            kind: "Field",
+                                                            name: {
+                                                              kind: "Name",
+                                                              value: "fileId",
+                                                            },
+                                                          },
+                                                        ],
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "failed",
+                                                      },
+                                                      selectionSet: {
+                                                        kind: "SelectionSet",
+                                                        selections: [
+                                                          {
+                                                            kind: "Field",
+                                                            name: {
+                                                              kind: "Name",
+                                                              value: "filename",
+                                                            },
+                                                          },
+                                                          {
+                                                            kind: "Field",
+                                                            name: {
+                                                              kind: "Name",
+                                                              value: "error",
+                                                            },
+                                                          },
+                                                        ],
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageStreamEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "eventType",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "data",
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageErrorEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "message",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "code",
+                                                      },
+                                                    },
+                                                  ],
+                                                },
+                                              },
+                                              {
+                                                kind: "InlineFragment",
+                                                typeCondition: {
+                                                  kind: "NamedType",
+                                                  name: {
+                                                    kind: "Name",
+                                                    value:
+                                                      "AgentMessageUnknownEvent",
+                                                  },
+                                                },
+                                                selectionSet: {
+                                                  kind: "SelectionSet",
+                                                  selections: [
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "kind",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "rawType",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "rawSubtype",
+                                                      },
+                                                    },
+                                                    {
+                                                      kind: "Field",
+                                                      name: {
+                                                        kind: "Name",
+                                                        value: "data",
+                                                      },
+                                                    },
+                                                  ],
                                                 },
                                               },
                                             ],
@@ -1490,49 +1808,7 @@ export const SessionChatPageQueryDocument = {
                                       kind: "NamedType",
                                       name: {
                                         kind: "Name",
-                                        value: "AgentMessageToolSummaryPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "summary",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "precedingToolUseIds",
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageRunResultPart",
+                                        value: "AgentMessageResultPart",
                                       },
                                     },
                                     selectionSet: {
@@ -1607,268 +1883,6 @@ export const SessionChatPageQueryDocument = {
                                                       },
                                                     },
                                                   ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageStatusEventPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "subtype",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "data",
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageFileBatchPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "processedAt",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "files",
-                                                },
-                                                selectionSet: {
-                                                  kind: "SelectionSet",
-                                                  selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "filename",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "fileId",
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "failed",
-                                                },
-                                                selectionSet: {
-                                                  kind: "SelectionSet",
-                                                  selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "filename",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "error",
-                                                      },
-                                                    },
-                                                  ],
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageStreamEventPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "eventType",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "data",
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageErrorEventPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "message",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "code",
-                                                },
-                                              },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: "InlineFragment",
-                                    typeCondition: {
-                                      kind: "NamedType",
-                                      name: {
-                                        kind: "Name",
-                                        value: "AgentMessageUnknownEventPart",
-                                      },
-                                    },
-                                    selectionSet: {
-                                      kind: "SelectionSet",
-                                      selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "data" },
-                                          selectionSet: {
-                                            kind: "SelectionSet",
-                                            selections: [
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "rawType",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "rawSubtype",
-                                                },
-                                              },
-                                              {
-                                                kind: "Field",
-                                                name: {
-                                                  kind: "Name",
-                                                  value: "data",
                                                 },
                                               },
                                             ],

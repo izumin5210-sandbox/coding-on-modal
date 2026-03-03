@@ -1,9 +1,12 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resumeHook, start } from "workflow/api";
 import type {
+  AgentEventPart,
   AgentMessage,
+  AgentMessageData,
   AgentMessageMetadata,
   AgentMessagePart,
+  AgentResultPart,
   GetSessionChatResponse,
   SendSessionChatMessageInput,
   SendSessionChatMessageResponse,
@@ -39,134 +42,32 @@ type SdkEnvelope = {
   message: SDKMessage;
 };
 
-type IntermediateDynamicToolPart =
-  | {
-      type: "dynamic-tool";
-      toolName: string;
-      toolCallId: string;
-      title?: string;
-      providerExecuted?: boolean;
-      state: "input-streaming";
-      input: unknown | undefined;
-    }
-  | {
-      type: "dynamic-tool";
-      toolName: string;
-      toolCallId: string;
-      title?: string;
-      providerExecuted?: boolean;
-      state: "input-available";
-      input: unknown;
-    }
-  | {
-      type: "dynamic-tool";
-      toolName: string;
-      toolCallId: string;
-      title?: string;
-      providerExecuted?: boolean;
-      state: "output-available";
-      input: unknown;
-      output: unknown;
-      preliminary?: boolean;
-    }
-  | {
-      type: "dynamic-tool";
-      toolName: string;
-      toolCallId: string;
-      title?: string;
-      providerExecuted?: boolean;
-      state: "output-error";
-      input: unknown;
-      errorText: string;
-    }
-  | {
-      type: "dynamic-tool";
-      toolName: string;
-      toolCallId: string;
-      title?: string;
-      providerExecuted?: boolean;
-      state: "output-denied";
-      input: unknown;
-      approval: {
-        id: string;
-        approved: false;
-        reason?: string;
-      };
-    };
+type AgentDynamicToolPart = Extract<AgentMessagePart, { type: "dynamic-tool" }>;
+type AgentMessageEventData = AgentMessageData["event"];
 
-type IntermediateMessagePart =
-  | {
-      type: "text";
-      text: string;
-    }
-  | IntermediateDynamicToolPart
-  | {
-      type: "tool-call";
-      toolUseId: string;
-      toolName?: string;
-      input?: unknown;
-    }
-  | {
-      type: "tool-result";
-      toolUseId?: string;
-      result?: unknown;
-      isError?: boolean;
-    }
-  | {
-      type: "tool-progress";
-      toolUseId: string;
-      toolName: string;
-      elapsedSeconds: number;
-    }
-  | {
-      type: "tool-summary";
-      summary: string;
-      precedingToolUseIds: string[];
-    }
-  | {
-      type: "result";
-      subtype: string;
-      isError: boolean;
-      summaryText: string;
-      metrics?: {
-        durationMs?: number;
-        durationApiMs?: number;
-        numTurns?: number;
-        totalCostUsd?: number;
-      };
-    }
-  | {
-      type: "status";
-      subtype: string;
-      data: Record<string, unknown>;
-    }
-  | {
-      type: "file-batch";
-      files: { filename: string; fileId: string }[];
-      failed: { filename: string; error: string }[];
-      processedAt?: string;
-    }
-  | {
-      type: "stream-event";
-      eventType?: string;
-      data: unknown;
-    }
-  | {
-      type: "error";
-      message: string;
-      code?: string;
-    }
-  | {
-      type: "unknown";
-      rawType: string;
-      rawSubtype?: string;
-      data: unknown;
-    };
+type ToolCallMarkerPart = {
+  type: "tool-call-marker";
+  toolUseId: string;
+  toolName?: string;
+  input?: unknown;
+};
+
+type ToolResultMarkerPart = {
+  type: "tool-result-marker";
+  toolUseId?: string;
+  result?: unknown;
+  isError?: boolean;
+};
+
+type NormalizedMessagePart =
+  | AgentMessagePart
+  | ToolCallMarkerPart
+  | ToolResultMarkerPart;
 
 type IntermediateMessage = {
   id: string;
   role: AgentMessage["role"];
-  parts: IntermediateMessagePart[];
+  parts: NormalizedMessagePart[];
   createdAt: string;
   updatedAt: string;
   metadata?: AgentMessageMetadata;
@@ -214,10 +115,24 @@ function mergeMetadata(
   });
 }
 
+function createEventPart(data: AgentMessageEventData): AgentEventPart {
+  return {
+    type: "data-event",
+    data,
+  };
+}
+
+function createResultPart(data: AgentMessageData["result"]): AgentResultPart {
+  return {
+    type: "data-result",
+    data,
+  };
+}
+
 function createMessage(
   envelope: SdkEnvelope,
   role: AgentMessage["role"],
-  parts: IntermediateMessagePart[],
+  parts: NormalizedMessagePart[],
   metadata?: AgentMessageMetadata,
 ): IntermediateMessage {
   return {
@@ -227,8 +142,8 @@ function createMessage(
       parts.length > 0
         ? parts
         : [
-            {
-              type: "unknown",
+            createEventPart({
+              kind: "unknown",
               rawType:
                 getString(
                   (envelope.message as unknown as Record<string, unknown>).type,
@@ -238,7 +153,7 @@ function createMessage(
                   .subtype,
               ),
               data: envelope.message,
-            },
+            }),
           ],
     createdAt: envelope.createdAt,
     updatedAt: envelope.updatedAt,
@@ -289,13 +204,13 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
         id: row.id,
         role: "system",
         parts: [
-          {
-            type: "error",
+          createEventPart({
+            kind: "error",
             code: "invalid_json",
             message: `Invalid stored SDK message JSON: ${
               error instanceof Error ? error.message : String(error)
             }`,
-          },
+          }),
         ],
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -313,16 +228,22 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   return { envelopes, invalidMessages };
 }
 
-function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
+function normalizeContentBlocks(blocks: unknown): NormalizedMessagePart[] {
   if (!Array.isArray(blocks)) {
     return [];
   }
 
-  const parts: IntermediateMessagePart[] = [];
+  const parts: NormalizedMessagePart[] = [];
 
   for (const block of blocks) {
     if (!isRecord(block)) {
-      parts.push({ type: "unknown", rawType: "non_object_block", data: block });
+      parts.push(
+        createEventPart({
+          kind: "unknown",
+          rawType: "non_object_block",
+          data: block,
+        }),
+      );
       continue;
     }
 
@@ -336,11 +257,19 @@ function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
       continue;
     }
 
+    if (blockType === "thinking" || blockType === "reasoning") {
+      const text = getString(block.text) ?? getString(block.thinking);
+      if (text?.trim()) {
+        parts.push({ type: "reasoning", text: text.trim() });
+      }
+      continue;
+    }
+
     if (blockType === "tool_use") {
       const toolUseId =
         getString(block.id) ?? getString(block.tool_use_id) ?? "unknown";
       parts.push({
-        type: "tool-call",
+        type: "tool-call-marker",
         toolUseId,
         toolName: getString(block.name),
         input: block.input,
@@ -350,7 +279,7 @@ function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
 
     if (blockType === "tool_result") {
       parts.push({
-        type: "tool-result",
+        type: "tool-result-marker",
         toolUseId: getString(block.tool_use_id),
         result: "content" in block ? block.content : block,
         isError: getBoolean(block.is_error),
@@ -358,11 +287,13 @@ function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
       continue;
     }
 
-    parts.push({
-      type: "unknown",
-      rawType: blockType,
-      data: block,
-    });
+    parts.push(
+      createEventPart({
+        kind: "unknown",
+        rawType: blockType,
+        data: block,
+      }),
+    );
   }
 
   return parts;
@@ -370,7 +301,7 @@ function normalizeContentBlocks(blocks: unknown): IntermediateMessagePart[] {
 
 function normalizeMessageParamToParts(
   messageParam: unknown,
-): IntermediateMessagePart[] {
+): NormalizedMessagePart[] {
   if (typeof messageParam === "string") {
     const text = messageParam.trim();
     return text ? [{ type: "text", text }] : [];
@@ -378,7 +309,11 @@ function normalizeMessageParamToParts(
 
   if (!isRecord(messageParam)) {
     return [
-      { type: "unknown", rawType: "user_message_param", data: messageParam },
+      createEventPart({
+        kind: "unknown",
+        rawType: "user_message_param",
+        data: messageParam,
+      }),
     ];
   }
 
@@ -392,7 +327,11 @@ function normalizeMessageParamToParts(
   }
 
   return [
-    { type: "unknown", rawType: "user_message_param", data: messageParam },
+    createEventPart({
+      kind: "unknown",
+      rawType: "user_message_param",
+      data: messageParam,
+    }),
   ];
 }
 
@@ -424,7 +363,7 @@ function createDynamicToolInputPart(
   toolCallId: string,
   input: unknown,
   state: "input-available" | "input-streaming" = "input-available",
-): IntermediateDynamicToolPart {
+): AgentDynamicToolPart {
   return {
     type: "dynamic-tool",
     toolName,
@@ -440,7 +379,7 @@ function createDynamicToolOutputPart(
   input: unknown,
   result: unknown,
   isError: boolean,
-): IntermediateDynamicToolPart {
+): AgentDynamicToolPart {
   if (isError) {
     return {
       type: "dynamic-tool",
@@ -474,12 +413,12 @@ function buildResultSummaryText(
 function statusPartFromRecord(
   subtype: string,
   record: Record<string, unknown>,
-): IntermediateMessagePart {
-  return {
-    type: "status",
+): AgentEventPart {
+  return createEventPart({
+    kind: "status",
     subtype,
     data: omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
-  };
+  });
 }
 
 function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
@@ -489,11 +428,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
   if (message.type === "user") {
     const parts = normalizeMessageParamToParts(message.message);
     const hasToolResultInContent = parts.some(
-      (part) => part.type === "tool-result",
+      (part) => part.type === "tool-result-marker",
     );
     if (message.tool_use_result !== undefined && !hasToolResultInContent) {
       parts.unshift({
-        type: "tool-result",
+        type: "tool-result-marker",
         toolUseId:
           message.parent_tool_use_id ??
           extractToolUseIdFromUnknown(message.tool_use_result),
@@ -505,7 +444,9 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       message.isSynthetic === true ||
       message.parent_tool_use_id !== null ||
       message.tool_use_result !== undefined;
-    const hasToolResult = parts.some((part) => part.type === "tool-result");
+    const hasToolResult = parts.some(
+      (part) => part.type === "tool-result-marker",
+    );
 
     const role = isSyntheticLike ? "assistant" : "user";
     return createMessage(
@@ -526,11 +467,13 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
   if (message.type === "assistant") {
     const parts = normalizeContentBlocks(message.message.content);
     if (message.error) {
-      parts.push({
-        type: "error",
-        code: message.error,
-        message: `Assistant message error: ${message.error}`,
-      });
+      parts.push(
+        createEventPart({
+          kind: "error",
+          code: message.error,
+          message: `Assistant message error: ${message.error}`,
+        }),
+      );
     }
     return createMessage(
       envelope,
@@ -547,12 +490,12 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "tool-progress",
+        createEventPart({
+          kind: "tool-progress",
           toolUseId: message.tool_use_id,
           toolName: message.tool_name,
           elapsedSeconds: message.elapsed_time_seconds,
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -567,11 +510,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "tool-summary",
+        createEventPart({
+          kind: "tool-summary",
           summary: message.summary,
           precedingToolUseIds: message.preceding_tool_use_ids,
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -585,8 +528,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       envelope,
       "system",
       [
-        {
-          type: "result",
+        createResultPart({
           subtype: message.subtype,
           isError: message.is_error,
           summaryText: buildResultSummaryText(message),
@@ -596,7 +538,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
             numTurns: message.num_turns,
             totalCostUsd: message.total_cost_usd,
           },
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         status: message.is_error ? "error" : "done",
@@ -610,15 +552,15 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       envelope,
       "system",
       [
-        {
-          type: "status",
+        createEventPart({
+          kind: "status",
           subtype: "auth_status",
           data: {
             isAuthenticating: message.isAuthenticating,
             output: message.output,
             error: message.error,
           },
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -635,11 +577,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "stream-event",
+        createEventPart({
+          kind: "stream",
           eventType,
           data: message.event,
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -654,8 +596,8 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
         envelope,
         "system",
         [
-          {
-            type: "file-batch",
+          createEventPart({
+            kind: "file-batch",
             files: message.files.map((file) => ({
               filename: file.filename,
               fileId: file.file_id,
@@ -665,7 +607,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
               error: file.error,
             })),
             processedAt: message.processed_at,
-          },
+          }),
         ],
         mergeMetadata(baseMetadata, {
           visibility: "trace",
@@ -694,12 +636,12 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
     envelope,
     "system",
     [
-      {
-        type: "unknown",
+      createEventPart({
+        kind: "unknown",
         rawType: (message as unknown as { type?: string }).type ?? "unknown",
         rawSubtype: (message as unknown as { subtype?: string }).subtype,
         data: message,
-      },
+      }),
     ],
     mergeMetadata(baseMetadata, {
       visibility: "trace",
@@ -728,7 +670,7 @@ function synthesizeDynamicToolParts(
     transformed.push(message);
 
     for (const part of sourceMessage.parts) {
-      if (part.type === "tool-call") {
+      if (part.type === "tool-call-marker") {
         const toolName = part.toolName ?? "tool";
         const dynamicPart = createDynamicToolInputPart(
           toolName,
@@ -741,8 +683,8 @@ function synthesizeDynamicToolParts(
         continue;
       }
 
-      if (part.type === "tool-progress") {
-        const existingRef = toolRefById.get(part.toolUseId);
+      if (part.type === "data-event" && part.data.kind === "tool-progress") {
+        const existingRef = toolRefById.get(part.data.toolUseId);
         if (existingRef) {
           const current = existingRef.message.parts[existingRef.partIndex];
           if (
@@ -763,7 +705,7 @@ function synthesizeDynamicToolParts(
         continue;
       }
 
-      if (part.type === "tool-result") {
+      if (part.type === "tool-result-marker") {
         const toolCallId = part.toolUseId;
         const existingRef = toolCallId
           ? toolRefById.get(toolCallId)
@@ -818,93 +760,11 @@ function sortMessages(messages: IntermediateMessage[]): IntermediateMessage[] {
   });
 }
 
-function toAgentPart(part: IntermediateMessagePart): AgentMessagePart | null {
-  switch (part.type) {
-    case "text":
-      return part;
-    case "dynamic-tool":
-      return part;
-    case "tool-progress":
-      return {
-        type: "data-tool_progress",
-        data: {
-          toolUseId: part.toolUseId,
-          toolName: part.toolName,
-          elapsedSeconds: part.elapsedSeconds,
-        },
-      };
-    case "tool-summary":
-      return {
-        type: "data-tool_summary",
-        data: {
-          summary: part.summary,
-          precedingToolUseIds: part.precedingToolUseIds,
-        },
-      };
-    case "result":
-      return {
-        type: "data-run_result",
-        data: {
-          subtype: part.subtype,
-          isError: part.isError,
-          summaryText: part.summaryText,
-          metrics: part.metrics,
-        },
-      };
-    case "status":
-      return {
-        type: "data-status_event",
-        data: {
-          subtype: part.subtype,
-          data: part.data,
-        },
-      };
-    case "file-batch":
-      return {
-        type: "data-file_batch",
-        data: {
-          files: part.files,
-          failed: part.failed,
-          processedAt: part.processedAt,
-        },
-      };
-    case "stream-event":
-      return {
-        type: "data-stream_event",
-        data: {
-          eventType: part.eventType,
-          data: part.data,
-        },
-      };
-    case "error":
-      return {
-        type: "data-error_event",
-        data: {
-          message: part.message,
-          code: part.code,
-        },
-      };
-    case "unknown":
-      return {
-        type: "data-unknown_event",
-        data: {
-          rawType: part.rawType,
-          rawSubtype: part.rawSubtype,
-          data: part.data,
-        },
-      };
-    case "tool-call":
-    case "tool-result":
-      return null;
-    default:
-      return null;
-  }
-}
-
 function toAgentMessage(message: IntermediateMessage): AgentMessage {
-  const parts = message.parts
-    .map((part) => toAgentPart(part))
-    .filter((part): part is AgentMessagePart => part !== null);
+  const parts = message.parts.filter(
+    (part): part is AgentMessagePart =>
+      part.type !== "tool-call-marker" && part.type !== "tool-result-marker",
+  );
 
   const metadata = compactMetadata({
     createdAt: message.createdAt,

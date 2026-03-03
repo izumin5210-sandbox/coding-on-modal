@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  SendSessionChatMessageMutationMutation,
+  SendSessionChatMessageMutationMutationVariables,
+  SessionChatPageQueryQuery,
+  SessionChatPageQueryQueryVariables,
+  SubmitSessionChatUserInputMutationMutation,
+  SubmitSessionChatUserInputMutationMutationVariables,
+} from "@/lib/graphql/__generated__/graphql";
+import type {
   AgentMessage,
-  AgentMessageData,
+  AgentMessageEventData,
   AgentMessageMetadata,
   AgentMessagePart,
   GetSessionChatResponse,
@@ -9,14 +17,6 @@ import type {
   SessionChatPendingUserInputAnswerValue,
 } from "@/lib/session-chat-types";
 import type { SessionRecord, SessionStatus } from "@/lib/session-types";
-import {
-  type SessionChatPageQueryQuery,
-  type SessionChatPageQueryQueryVariables,
-  type SendSessionChatMessageMutationMutation,
-  type SendSessionChatMessageMutationMutationVariables,
-  type SubmitSessionChatUserInputMutationMutation,
-  type SubmitSessionChatUserInputMutationMutationVariables,
-} from "@/lib/graphql/__generated__/graphql";
 import { executeGraphQL } from "./client";
 import {
   sendSessionChatMessageDocument,
@@ -29,6 +29,10 @@ type SessionChatPageMessage =
   SessionChatPageSession["chat"]["messages"][number];
 type SessionChatPageMetadata = NonNullable<SessionChatPageMessage["metadata"]>;
 type SessionChatPagePart = SessionChatPageMessage["parts"][number];
+type SessionChatPageEventData = Extract<
+  SessionChatPagePart,
+  { __typename: "AgentMessageEventPart" }
+>["data"];
 type SessionChatPagePendingUserInput =
   SessionChatPageSession["chat"]["pendingUserInput"];
 
@@ -114,34 +118,6 @@ function toTextState(
   }
 }
 
-function toDynamicToolState(
-  state:
-    | "APPROVAL_REQUESTED"
-    | "APPROVAL_RESPONDED"
-    | "INPUT_AVAILABLE"
-    | "INPUT_STREAMING"
-    | "OUTPUT_AVAILABLE"
-    | "OUTPUT_DENIED"
-    | "OUTPUT_ERROR",
-): Extract<AgentMessagePart, { type: "dynamic-tool" }>["state"] {
-  switch (state) {
-    case "INPUT_STREAMING":
-      return "input-streaming";
-    case "INPUT_AVAILABLE":
-      return "input-available";
-    case "APPROVAL_REQUESTED":
-      return "approval-requested";
-    case "APPROVAL_RESPONDED":
-      return "approval-responded";
-    case "OUTPUT_AVAILABLE":
-      return "output-available";
-    case "OUTPUT_ERROR":
-      return "output-error";
-    case "OUTPUT_DENIED":
-      return "output-denied";
-  }
-}
-
 function toMetadata(
   metadata: SessionChatPageMessage["metadata"],
 ): AgentMessageMetadata | undefined {
@@ -182,45 +158,15 @@ function toPart(part: SessionChatPagePart): AgentMessagePart {
         state: toTextState(part.reasoningState),
       };
     case "AgentMessageDynamicToolPart":
+      return toDynamicToolPart(part);
+    case "AgentMessageEventPart":
       return {
-        type: "dynamic-tool",
-        toolName: part.toolName,
-        toolCallId: part.toolCallId,
-        title: part.title ?? undefined,
-        providerExecuted: part.providerExecuted ?? undefined,
-        state: toDynamicToolState(part.toolState),
-        input: part.input ?? undefined,
-        output: part.output ?? undefined,
-        errorText: part.errorText ?? undefined,
-        preliminary: part.preliminary ?? undefined,
-        approval: part.approval
-          ? {
-              id: part.approval.id,
-              approved: part.approval.approved ?? undefined,
-              reason: part.approval.reason ?? undefined,
-            }
-          : undefined,
-      } as AgentMessagePart;
-    case "AgentMessageToolProgressPart":
-      return {
-        type: "data-tool_progress",
-        data: {
-          toolUseId: part.data.toolUseId,
-          toolName: part.data.toolName,
-          elapsedSeconds: part.data.elapsedSeconds,
-        },
+        type: "data-event",
+        data: toEventData(part.data),
       };
-    case "AgentMessageToolSummaryPart":
+    case "AgentMessageResultPart":
       return {
-        type: "data-tool_summary",
-        data: {
-          summary: part.data.summary,
-          precedingToolUseIds: part.data.precedingToolUseIds,
-        },
-      };
-    case "AgentMessageRunResultPart":
-      return {
-        type: "data-run_result",
+        type: "data-result",
         data: {
           subtype: part.data.subtype,
           isError: part.data.isError,
@@ -235,53 +181,153 @@ function toPart(part: SessionChatPagePart): AgentMessagePart {
             : undefined,
         },
       };
-    case "AgentMessageStatusEventPart":
+  }
+}
+
+function toDynamicToolPart(
+  part: Extract<
+    SessionChatPagePart,
+    { __typename: "AgentMessageDynamicToolPart" }
+  >,
+): Extract<AgentMessagePart, { type: "dynamic-tool" }> {
+  const base = {
+    type: "dynamic-tool" as const,
+    toolName: part.toolName,
+    toolCallId: part.toolCallId,
+    title: part.title ?? undefined,
+    providerExecuted: part.providerExecuted ?? undefined,
+  };
+
+  switch (part.toolState) {
+    case "INPUT_STREAMING":
       return {
-        type: "data-status_event",
-        data: {
-          subtype: part.data.subtype,
-          data: part.data.data as AgentMessageData["status_event"]["data"],
+        ...base,
+        state: "input-streaming",
+        input: part.input ?? undefined,
+      };
+    case "INPUT_AVAILABLE":
+      return {
+        ...base,
+        state: "input-available",
+        input: part.input,
+      };
+    case "APPROVAL_REQUESTED":
+      return {
+        ...base,
+        state: "approval-requested",
+        input: part.input,
+        approval: {
+          id: part.approval?.id ?? part.toolCallId,
         },
       };
-    case "AgentMessageFileBatchPart":
+    case "APPROVAL_RESPONDED":
       return {
-        type: "data-file_batch",
-        data: {
-          files: part.data.files.map((file) => ({
-            filename: file.filename,
-            fileId: file.fileId,
-          })),
-          failed: part.data.failed.map((file) => ({
-            filename: file.filename,
-            error: file.error,
-          })),
-          processedAt: part.data.processedAt ?? undefined,
+        ...base,
+        state: "approval-responded",
+        input: part.input,
+        approval: {
+          id: part.approval?.id ?? part.toolCallId,
+          approved: part.approval?.approved ?? false,
+          reason: part.approval?.reason ?? undefined,
         },
       };
-    case "AgentMessageStreamEventPart":
+    case "OUTPUT_AVAILABLE":
       return {
-        type: "data-stream_event",
-        data: {
-          eventType: part.data.eventType ?? undefined,
-          data: part.data.data,
+        ...base,
+        state: "output-available",
+        input: part.input,
+        output: part.output,
+        preliminary: part.preliminary ?? undefined,
+        approval:
+          part.approval?.approved === true
+            ? {
+                id: part.approval.id,
+                approved: true,
+                reason: part.approval.reason ?? undefined,
+              }
+            : undefined,
+      };
+    case "OUTPUT_ERROR":
+      return {
+        ...base,
+        state: "output-error",
+        input: part.input ?? undefined,
+        errorText: part.errorText ?? "Tool execution failed.",
+        approval:
+          part.approval?.approved === true
+            ? {
+                id: part.approval.id,
+                approved: true,
+                reason: part.approval.reason ?? undefined,
+              }
+            : undefined,
+      };
+    case "OUTPUT_DENIED":
+      return {
+        ...base,
+        state: "output-denied",
+        input: part.input,
+        approval: {
+          id: part.approval?.id ?? part.toolCallId,
+          approved: false,
+          reason: part.approval?.reason ?? undefined,
         },
       };
-    case "AgentMessageErrorEventPart":
+  }
+}
+
+function toEventData(data: SessionChatPageEventData): AgentMessageEventData {
+  switch (data.__typename) {
+    case "AgentMessageToolProgressEvent":
       return {
-        type: "data-error_event",
-        data: {
-          message: part.data.message,
-          code: part.data.code ?? undefined,
-        },
+        kind: "tool-progress",
+        toolUseId: data.toolUseId,
+        toolName: data.toolName,
+        elapsedSeconds: data.elapsedSeconds,
       };
-    case "AgentMessageUnknownEventPart":
+    case "AgentMessageToolSummaryEvent":
       return {
-        type: "data-unknown_event",
-        data: {
-          rawType: part.data.rawType,
-          rawSubtype: part.data.rawSubtype ?? undefined,
-          data: part.data.data,
-        },
+        kind: "tool-summary",
+        summary: data.summary,
+        precedingToolUseIds: data.precedingToolUseIds,
+      };
+    case "AgentMessageStatusEvent":
+      return {
+        kind: "status",
+        subtype: data.subtype,
+        data: data.data as Record<string, unknown>,
+      };
+    case "AgentMessageFileBatchEvent":
+      return {
+        kind: "file-batch",
+        files: data.files.map((file) => ({
+          filename: file.filename,
+          fileId: file.fileId,
+        })),
+        failed: data.failed.map((file) => ({
+          filename: file.filename,
+          error: file.error,
+        })),
+        processedAt: data.processedAt ?? undefined,
+      };
+    case "AgentMessageStreamEvent":
+      return {
+        kind: "stream",
+        eventType: data.eventType ?? undefined,
+        data: data.data,
+      };
+    case "AgentMessageErrorEvent":
+      return {
+        kind: "error",
+        message: data.message,
+        code: data.code ?? undefined,
+      };
+    case "AgentMessageUnknownEvent":
+      return {
+        kind: "unknown",
+        rawType: data.rawType,
+        rawSubtype: data.rawSubtype ?? undefined,
+        data: data.data,
       };
   }
 }

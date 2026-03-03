@@ -217,22 +217,57 @@ export const sessionChatPageDocument = graphql(`
                 reason
               }
             }
-            ... on AgentMessageToolProgressPart {
+            ... on AgentMessageEventPart {
               type
               data {
-                toolUseId
-                toolName
-                elapsedSeconds
+                __typename
+                ... on AgentMessageToolProgressEvent {
+                  kind
+                  toolUseId
+                  toolName
+                  elapsedSeconds
+                }
+                ... on AgentMessageToolSummaryEvent {
+                  kind
+                  summary
+                  precedingToolUseIds
+                }
+                ... on AgentMessageStatusEvent {
+                  kind
+                  subtype
+                  data
+                }
+                ... on AgentMessageFileBatchEvent {
+                  kind
+                  processedAt
+                  files {
+                    filename
+                    fileId
+                  }
+                  failed {
+                    filename
+                    error
+                  }
+                }
+                ... on AgentMessageStreamEvent {
+                  kind
+                  eventType
+                  data
+                }
+                ... on AgentMessageErrorEvent {
+                  kind
+                  message
+                  code
+                }
+                ... on AgentMessageUnknownEvent {
+                  kind
+                  rawType
+                  rawSubtype
+                  data
+                }
               }
             }
-            ... on AgentMessageToolSummaryPart {
-              type
-              data {
-                summary
-                precedingToolUseIds
-              }
-            }
-            ... on AgentMessageRunResultPart {
+            ... on AgentMessageResultPart {
               type
               data {
                 subtype
@@ -244,49 +279,6 @@ export const sessionChatPageDocument = graphql(`
                   numTurns
                   totalCostUsd
                 }
-              }
-            }
-            ... on AgentMessageStatusEventPart {
-              type
-              data {
-                subtype
-                data
-              }
-            }
-            ... on AgentMessageFileBatchPart {
-              type
-              data {
-                processedAt
-                files {
-                  filename
-                  fileId
-                }
-                failed {
-                  filename
-                  error
-                }
-              }
-            }
-            ... on AgentMessageStreamEventPart {
-              type
-              data {
-                eventType
-                data
-              }
-            }
-            ... on AgentMessageErrorEventPart {
-              type
-              data {
-                message
-                code
-              }
-            }
-            ... on AgentMessageUnknownEventPart {
-              type
-              data {
-                rawType
-                rawSubtype
-                data
               }
             }
           }

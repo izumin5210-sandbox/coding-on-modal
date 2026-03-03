@@ -35,17 +35,17 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import {
+  useSendSessionChatMessageMutation,
+  useSessionChatQuery,
+  useSubmitSessionChatUserInputMutation,
+} from "@/lib/graphql/session-chat";
 import type {
   AgentMessage,
   AgentMessagePart,
   SessionChatPendingUserInput,
   SessionChatPendingUserInputAnswerValue,
 } from "@/lib/session-chat-types";
-import {
-  useSendSessionChatMessageMutation,
-  useSessionChatQuery,
-  useSubmitSessionChatUserInputMutation,
-} from "@/lib/graphql/session-chat";
 import { cn } from "@/lib/utils";
 
 function formatTime(iso: string): string {
@@ -245,36 +245,7 @@ function PartView({ part }: { part: AgentMessagePart }) {
         />
       );
 
-    case "data-tool_progress":
-      return (
-        <ToolLogCard
-          toolName={part.data.toolName}
-          toolUseId={part.data.toolUseId}
-          state="input-streaming"
-          meta={
-            <p className="text-xs text-muted-foreground">
-              elapsed: {part.data.elapsedSeconds.toFixed(1)}s
-            </p>
-          }
-        />
-      );
-
-    case "data-tool_summary":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm text-slate-900">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Tool Summary
-          </div>
-          <MessageResponse>{part.data.summary}</MessageResponse>
-          {part.data.precedingToolUseIds.length > 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
-              IDs: {part.data.precedingToolUseIds.join(", ")}
-            </p>
-          ) : null}
-        </div>
-      );
-
-    case "data-run_result":
+    case "data-result":
       return (
         <div
           className={cn(
@@ -302,65 +273,95 @@ function PartView({ part }: { part: AgentMessagePart }) {
         </div>
       );
 
-    case "data-status_event":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Status · {part.data.subtype}
-          </div>
-          <JsonDetails label="Data" value={part.data.data} />
-        </div>
-      );
-
-    case "data-file_batch":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Files Persisted
-          </div>
-          <p className="text-xs text-slate-600">
-            files: {part.data.files.length} · failed: {part.data.failed.length}
-            {part.data.processedAt ? ` · ${part.data.processedAt}` : ""}
-          </p>
-          <div className="mt-2 space-y-2">
-            <JsonDetails label="Files" value={part.data.files} />
-            {part.data.failed.length > 0 ? (
-              <JsonDetails label="Failed" value={part.data.failed} />
-            ) : null}
-          </div>
-        </div>
-      );
-
-    case "data-stream_event":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Stream Event{part.data.eventType ? ` · ${part.data.eventType}` : ""}
-          </div>
-          <JsonDetails label="Event" value={part.data.data} />
-        </div>
-      );
-
-    case "data-error_event":
-      return (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-950">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">
-            Error{part.data.code ? ` · ${part.data.code}` : ""}
-          </div>
-          <MessageResponse>{part.data.message}</MessageResponse>
-        </div>
-      );
-
-    case "data-unknown_event":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Unknown · {part.data.rawType}
-            {part.data.rawSubtype ? ` / ${part.data.rawSubtype}` : ""}
-          </div>
-          <JsonDetails label="Raw" value={part.data.data} />
-        </div>
-      );
+    case "data-event":
+      switch (part.data.kind) {
+        case "tool-progress":
+          return (
+            <ToolLogCard
+              toolName={part.data.toolName}
+              toolUseId={part.data.toolUseId}
+              state="input-streaming"
+              meta={
+                <p className="text-xs text-muted-foreground">
+                  elapsed: {part.data.elapsedSeconds.toFixed(1)}s
+                </p>
+              }
+            />
+          );
+        case "tool-summary":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm text-slate-900">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Tool Summary
+              </div>
+              <MessageResponse>{part.data.summary}</MessageResponse>
+              {part.data.precedingToolUseIds.length > 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  IDs: {part.data.precedingToolUseIds.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          );
+        case "status":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Status · {part.data.subtype}
+              </div>
+              <JsonDetails label="Data" value={part.data.data} />
+            </div>
+          );
+        case "file-batch":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Files Persisted
+              </div>
+              <p className="text-xs text-slate-600">
+                files: {part.data.files.length} · failed:{" "}
+                {part.data.failed.length}
+                {part.data.processedAt ? ` · ${part.data.processedAt}` : ""}
+              </p>
+              <div className="mt-2 space-y-2">
+                <JsonDetails label="Files" value={part.data.files} />
+                {part.data.failed.length > 0 ? (
+                  <JsonDetails label="Failed" value={part.data.failed} />
+                ) : null}
+              </div>
+            </div>
+          );
+        case "stream":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Stream Event
+                {part.data.eventType ? ` · ${part.data.eventType}` : ""}
+              </div>
+              <JsonDetails label="Event" value={part.data.data} />
+            </div>
+          );
+        case "error":
+          return (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-950">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">
+                Error{part.data.code ? ` · ${part.data.code}` : ""}
+              </div>
+              <MessageResponse>{part.data.message}</MessageResponse>
+            </div>
+          );
+        case "unknown":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Unknown · {part.data.rawType}
+                {part.data.rawSubtype ? ` / ${part.data.rawSubtype}` : ""}
+              </div>
+              <JsonDetails label="Raw" value={part.data.data} />
+            </div>
+          );
+        default:
+          return null;
+      }
 
     default:
       return null;

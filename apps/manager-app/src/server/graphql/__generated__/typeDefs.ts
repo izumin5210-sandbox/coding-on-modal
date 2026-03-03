@@ -410,7 +410,195 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageErrorEventPart",
+        value: "AgentMessageErrorEvent",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "code",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "String",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "AgentMessageEventKind",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "message",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "UnionTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageEventData",
+      },
+      types: [
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageErrorEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageFileBatchEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageStatusEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageStreamEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageToolProgressEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageToolSummaryEvent",
+          },
+        },
+        {
+          kind: "NamedType",
+          name: {
+            kind: "Name",
+            value: "AgentMessageUnknownEvent",
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "EnumTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageEventKind",
+      },
+      values: [
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "TOOL_PROGRESS",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "TOOL_SUMMARY",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "STATUS",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "FILE_BATCH",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "STREAM",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "ERROR",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "UNKNOWN",
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageEventPart",
       },
       fields: [
         {
@@ -425,7 +613,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageErrorEventPartData",
+                value: "AgentMessageEventData",
               },
             },
           },
@@ -458,20 +646,29 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageErrorEventPartData",
+        value: "AgentMessageFileBatchEvent",
       },
       fields: [
         {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "code",
+            value: "failed",
           },
           type: {
-            kind: "NamedType",
-            name: {
-              kind: "Name",
-              value: "String",
+            kind: "NonNullType",
+            type: {
+              kind: "ListType",
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "AgentMessageFileBatchFailure",
+                  },
+                },
+              },
             },
           },
         },
@@ -479,7 +676,30 @@ export const typeDefs: DocumentNode = {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "message",
+            value: "files",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "ListType",
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: {
+                    kind: "Name",
+                    value: "AgentMessageFileBatchFile",
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
           },
           type: {
             kind: "NonNullType",
@@ -487,8 +707,22 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "String",
+                value: "AgentMessageEventKind",
               },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "processedAt",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "DateTime",
             },
           },
         },
@@ -585,128 +819,6 @@ export const typeDefs: DocumentNode = {
                 kind: "Name",
                 value: "String",
               },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageFileBatchPart",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "data",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageFileBatchPartData",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageFileBatchPartData",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "failed",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "ListType",
-              type: {
-                kind: "NonNullType",
-                type: {
-                  kind: "NamedType",
-                  name: {
-                    kind: "Name",
-                    value: "AgentMessageFileBatchFailure",
-                  },
-                },
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "files",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "ListType",
-              type: {
-                kind: "NonNullType",
-                type: {
-                  kind: "NamedType",
-                  name: {
-                    kind: "Name",
-                    value: "AgentMessageFileBatchFile",
-                  },
-                },
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "processedAt",
-          },
-          type: {
-            kind: "NamedType",
-            name: {
-              kind: "Name",
-              value: "DateTime",
             },
           },
         },
@@ -1008,14 +1120,7 @@ export const typeDefs: DocumentNode = {
           kind: "NamedType",
           name: {
             kind: "Name",
-            value: "AgentMessageErrorEventPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageFileBatchPart",
+            value: "AgentMessageEventPart",
           },
         },
         {
@@ -1029,21 +1134,7 @@ export const typeDefs: DocumentNode = {
           kind: "NamedType",
           name: {
             kind: "Name",
-            value: "AgentMessageRunResultPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageStatusEventPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageStreamEventPart",
+            value: "AgentMessageResultPart",
           },
         },
         {
@@ -1051,27 +1142,6 @@ export const typeDefs: DocumentNode = {
           name: {
             kind: "Name",
             value: "AgentMessageTextPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageToolProgressPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageToolSummaryPart",
-          },
-        },
-        {
-          kind: "NamedType",
-          name: {
-            kind: "Name",
-            value: "AgentMessageUnknownEventPart",
           },
         },
       ],
@@ -1193,93 +1263,10 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageRole",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "USER",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "ASSISTANT",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "SYSTEM",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageRunResultPart",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "data",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageRunResultPartData",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageRunResultPartData",
+        value: "AgentMessageResultData",
       },
       fields: [
         {
@@ -1309,7 +1296,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "AgentMessageRunResultPartDataMetrics",
+              value: "AgentMessageResultMetrics",
             },
           },
         },
@@ -1358,7 +1345,7 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageRunResultPartDataMetrics",
+        value: "AgentMessageResultMetrics",
       },
       fields: [
         {
@@ -1428,7 +1415,7 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageStatusEventPart",
+        value: "AgentMessageResultPart",
       },
       fields: [
         {
@@ -1443,7 +1430,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageStatusEventPartData",
+                value: "AgentMessageResultData",
               },
             },
           },
@@ -1473,10 +1460,45 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
+      kind: "EnumTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageRole",
+      },
+      values: [
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "USER",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "ASSISTANT",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "SYSTEM",
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageStatusEventPartData",
+        value: "AgentMessageStatusEvent",
       },
       fields: [
         {
@@ -1492,6 +1514,23 @@ export const typeDefs: DocumentNode = {
               name: {
                 kind: "Name",
                 value: "JSON",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "AgentMessageEventKind",
               },
             },
           },
@@ -1524,55 +1563,7 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageStreamEventPart",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "data",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageStreamEventPartData",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageStreamEventPartData",
+        value: "AgentMessageStreamEvent",
       },
       fields: [
         {
@@ -1603,6 +1594,23 @@ export const typeDefs: DocumentNode = {
             name: {
               kind: "Name",
               value: "String",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "AgentMessageEventKind",
+              },
             },
           },
         },
@@ -1707,55 +1715,7 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageToolProgressPart",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "data",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageToolProgressPartData",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageToolProgressPartData",
+        value: "AgentMessageToolProgressEvent",
       },
       fields: [
         {
@@ -1771,6 +1731,23 @@ export const typeDefs: DocumentNode = {
               name: {
                 kind: "Name",
                 value: "Float",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "AgentMessageEventKind",
               },
             },
           },
@@ -1820,14 +1797,14 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageToolSummaryPart",
+        value: "AgentMessageToolSummaryEvent",
       },
       fields: [
         {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "data",
+            value: "kind",
           },
           type: {
             kind: "NonNullType",
@@ -1835,42 +1812,11 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageToolSummaryPartData",
+                value: "AgentMessageEventKind",
               },
             },
           },
         },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageToolSummaryPartData",
-      },
-      fields: [
         {
           kind: "FieldDefinition",
           name: {
@@ -1922,55 +1868,7 @@ export const typeDefs: DocumentNode = {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
-        value: "AgentMessageUnknownEventPart",
-      },
-      fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "data",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageUnknownEventPartData",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "type",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "ObjectTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageUnknownEventPartData",
+        value: "AgentMessageUnknownEvent",
       },
       fields: [
         {
@@ -1986,6 +1884,23 @@ export const typeDefs: DocumentNode = {
               name: {
                 kind: "Name",
                 value: "JSON",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "kind",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "AgentMessageEventKind",
               },
             },
           },
@@ -3452,6 +3367,13 @@ export const typeDefs: DocumentNode = {
           kind: "EnumValueDefinition",
           name: {
             kind: "Name",
+            value: "ERROR",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
             value: "CREATING",
           },
         },
@@ -3467,13 +3389,6 @@ export const typeDefs: DocumentNode = {
           name: {
             kind: "Name",
             value: "TERMINATED",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "ERROR",
           },
         },
       ],

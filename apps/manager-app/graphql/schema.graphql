@@ -56,17 +56,53 @@ enum AgentMessageDynamicToolPartState {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageErrorEventPart {
-  data: AgentMessageErrorEventPartData!
+type AgentMessageErrorEvent {
+  code: String
+  kind: AgentMessageEventKind!
+  message: String!
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+union AgentMessageEventData =
+  | AgentMessageErrorEvent
+  | AgentMessageFileBatchEvent
+  | AgentMessageStatusEvent
+  | AgentMessageStreamEvent
+  | AgentMessageToolProgressEvent
+  | AgentMessageToolSummaryEvent
+  | AgentMessageUnknownEvent
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+enum AgentMessageEventKind {
+  TOOL_PROGRESS
+  TOOL_SUMMARY
+  STATUS
+  FILE_BATCH
+  STREAM
+  ERROR
+  UNKNOWN
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageEventPart {
+  data: AgentMessageEventData!
   type: String!
 }
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageErrorEventPartData {
-  code: String
-  message: String!
+type AgentMessageFileBatchEvent {
+  failed: [AgentMessageFileBatchFailure!]!
+  files: [AgentMessageFileBatchFile!]!
+  kind: AgentMessageEventKind!
+  processedAt: DateTime
 }
 
 """
@@ -83,23 +119,6 @@ Defined in: src/server/graphql/schema/agent-message.ts
 type AgentMessageFileBatchFile {
   fileId: String!
   filename: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageFileBatchPart {
-  data: AgentMessageFileBatchPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageFileBatchPartData {
-  failed: [AgentMessageFileBatchFailure!]!
-  files: [AgentMessageFileBatchFile!]!
-  processedAt: DateTime
 }
 
 """
@@ -144,16 +163,10 @@ Defined in: src/server/graphql/schema/agent-message.ts
 """
 union AgentMessagePart =
   | AgentMessageDynamicToolPart
-  | AgentMessageErrorEventPart
-  | AgentMessageFileBatchPart
+  | AgentMessageEventPart
   | AgentMessageReasoningPart
-  | AgentMessageRunResultPart
-  | AgentMessageStatusEventPart
-  | AgentMessageStreamEventPart
+  | AgentMessageResultPart
   | AgentMessageTextPart
-  | AgentMessageToolProgressPart
-  | AgentMessageToolSummaryPart
-  | AgentMessageUnknownEventPart
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
@@ -182,26 +195,9 @@ enum AgentMessageReasoningPartState {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageRole {
-  USER
-  ASSISTANT
-  SYSTEM
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageRunResultPart {
-  data: AgentMessageRunResultPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageRunResultPartData {
+type AgentMessageResultData {
   isError: Boolean!
-  metrics: AgentMessageRunResultPartDataMetrics
+  metrics: AgentMessageResultMetrics
   subtype: String!
   summaryText: String!
 }
@@ -209,7 +205,7 @@ type AgentMessageRunResultPartData {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageRunResultPartDataMetrics {
+type AgentMessageResultMetrics {
   durationApiMs: Float
   durationMs: Float
   numTurns: Float
@@ -219,33 +215,36 @@ type AgentMessageRunResultPartDataMetrics {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageStatusEventPart {
-  data: AgentMessageStatusEventPartData!
+type AgentMessageResultPart {
+  data: AgentMessageResultData!
   type: String!
 }
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageStatusEventPartData {
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message.ts
+"""
+type AgentMessageStatusEvent {
   data: JSON!
+  kind: AgentMessageEventKind!
   subtype: String!
 }
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageStreamEventPart {
-  data: AgentMessageStreamEventPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageStreamEventPartData {
+type AgentMessageStreamEvent {
   data: JSON!
   eventType: String
+  kind: AgentMessageEventKind!
 }
 
 """
@@ -268,16 +267,9 @@ enum AgentMessageTextPartState {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageToolProgressPart {
-  data: AgentMessageToolProgressPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageToolProgressPartData {
+type AgentMessageToolProgressEvent {
   elapsedSeconds: Float!
+  kind: AgentMessageEventKind!
   toolName: String!
   toolUseId: String!
 }
@@ -285,15 +277,8 @@ type AgentMessageToolProgressPartData {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageToolSummaryPart {
-  data: AgentMessageToolSummaryPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageToolSummaryPartData {
+type AgentMessageToolSummaryEvent {
+  kind: AgentMessageEventKind!
   precedingToolUseIds: [String!]!
   summary: String!
 }
@@ -301,16 +286,9 @@ type AgentMessageToolSummaryPartData {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-type AgentMessageUnknownEventPart {
-  data: AgentMessageUnknownEventPartData!
-  type: String!
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageUnknownEventPartData {
+type AgentMessageUnknownEvent {
   data: JSON!
+  kind: AgentMessageEventKind!
   rawSubtype: String
   rawType: String!
 }
@@ -496,10 +474,10 @@ type SessionSshInfo {
 Defined in: src/server/graphql/schema/session.ts
 """
 enum SessionStatus {
+  ERROR
   CREATING
   RUNNING
   TERMINATED
-  ERROR
 }
 
 """

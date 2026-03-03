@@ -26,7 +26,7 @@
 - Slack user ↔ app user binding uses a one-time link token flow: the bot sends an ephemeral message with a URL; the user authenticates via existing GitHub OAuth and the mapping is stored in `slack_user_mappings`.
 - Persist Claude Code chat transcripts server-side in SQLite as raw Claude Agent SDK `SDKMessage` JSON records, with UI-oriented shaping performed at read time.
 - Export agent messages in the GraphQL schema as AI SDK `UIMessage<Metadata, DataParts, {}>` object types instead of maintaining a separate custom message envelope.
-- Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts (stateful `input-*` / `output-*`) and move trace/result/status payloads into typed `data-*` parts so the Web UI can render against AI SDK-native message contracts.
+- Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts and keep non-tool transcript payloads in a reduced `data-event` / `data-result` taxonomy, with detailed event kinds nested under `data-event`.
 - Build the Session chat Web UI with Vercel AI Elements primitives (for example `Conversation`, `Message`, `PromptInput`) and adapt them to the app's generalized chat message schema.
 - Support multi-turn Session chat continuity by resuming Claude Code conversations using Claude Agent SDK `query()` with stored SDK session IDs.
 - Use Workflow DevKit (useworkflow.dev) Local World for durable orchestration; wrap `next.config.ts` with `withWorkflow()`.

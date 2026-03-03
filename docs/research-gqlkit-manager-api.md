@@ -114,16 +114,46 @@ export type AgentMessageMetadata = {
 };
 
 export type AgentMessageData = {
-  tool_progress: {
-    toolUseId: string;
-    toolName: string;
-    elapsedSeconds: number;
-  };
-  tool_summary: {
-    summary: string;
-    precedingToolUseIds: string[];
-  };
-  run_result: {
+  event:
+    | {
+        kind: "tool-progress";
+        toolUseId: string;
+        toolName: string;
+        elapsedSeconds: number;
+      }
+    | {
+        kind: "tool-summary";
+        summary: string;
+        precedingToolUseIds: string[];
+      }
+    | {
+        kind: "status";
+        subtype: string;
+        data: JSON;
+      }
+    | {
+        kind: "file-batch";
+        files: { filename: string; fileId: string }[];
+        failed: { filename: string; error: string }[];
+        processedAt?: DateTime;
+      }
+    | {
+        kind: "stream";
+        eventType?: string;
+        data: JSON;
+      }
+    | {
+        kind: "error";
+        message: string;
+        code?: string;
+      }
+    | {
+        kind: "unknown";
+        rawType: string;
+        rawSubtype?: string;
+        data: JSON;
+      };
+  result: {
     subtype: string;
     isError: boolean;
     summaryText: string;
@@ -134,24 +164,6 @@ export type AgentMessageData = {
       totalCostUsd?: number;
     };
   };
-  status_event: {
-    subtype: string;
-    data: JSON;
-  };
-  file_batch: {
-    files: { filename: string; fileId: string }[];
-    failed: { filename: string; error: string }[];
-    processedAt?: DateTime;
-  };
-  error_event: {
-    message: string;
-    code?: string;
-  };
-  unknown_event: {
-    rawType: string;
-    rawSubtype?: string;
-    data: JSON;
-  };
 };
 
 export type AgentMessage = UIMessage<AgentMessageMetadata, AgentMessageData, {}>;
@@ -160,7 +172,7 @@ export type AgentMessage = UIMessage<AgentMessageMetadata, AgentMessageData, {}>
 ### Why this shape
 - `UIMessage` already matches the rendering model used by AI SDK UI components.
 - `dynamic-tool` can replace the current custom `tool-call` and `tool-result` message parts for the main tool lifecycle.
-- Existing trace/status/result payloads fit naturally into typed `data-*` parts.
+- Existing trace/status/result payloads still fit naturally into typed `data-*` parts, but the public taxonomy should stay compact by collapsing them into `data-event` and `data-result`.
 - `UIMessage` does not include timestamps, so `createdAt` and `updatedAt` should move into `metadata`. This is an intentional adaptation to keep the top-level object exactly `UIMessage`.
 
 ## Pending User Input Model
@@ -229,7 +241,7 @@ apps/manager-app/graphql/schema.graphql
 
 Notes:
 - `route.ts` hosts Yoga and creates the gqlkit schema.
-- `src/lib/session-chat-types.ts` owns the exported `UIMessage` alias and the typed `data-*` payloads.
+- `src/lib/session-chat-types.ts` owns the exported `UIMessage` alias and the compact `data-event` / `data-result` payloads.
 - `schema/agent-message.ts` maps the shared chat message contract into GraphQL object and union types.
 - Existing REST route handlers should be removed only after the UI is switched over.
 
@@ -241,7 +253,7 @@ Notes:
   - `text`
   - `reasoning` when available
   - `dynamic-tool`
-  - typed `data-*` parts for trace/result/status payloads
+  - typed `data-event` and `data-result` parts for trace/result/status payloads
 - Update the chat UI to read `UIMessage` parts instead of the current custom part union.
 
 ### Phase 2: Introduce GraphQL infrastructure
