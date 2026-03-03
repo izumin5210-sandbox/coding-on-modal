@@ -1,65 +1,51 @@
 import type { IDString } from "@gqlkit-ts/runtime";
 import type {
+  AgentDynamicToolPart as SharedAgentDynamicToolPart,
+  AgentErrorEvent as SharedAgentErrorEvent,
+  AgentFileBatchFailure as SharedAgentFileBatchFailure,
+  AgentFileBatchFile as SharedAgentFileBatchFile,
   AgentMessage as SharedAgentMessage,
   AgentMessageEventData as SharedAgentMessageEventData,
+  AgentMessageMetadata as SharedAgentMessageMetadata,
   AgentMessagePart as SharedAgentMessagePart,
+  AgentMessageRole as SharedAgentMessageRole,
+  AgentReasoningPart as SharedAgentReasoningPart,
   AgentRunMetrics as SharedAgentRunMetrics,
+  AgentRunResultData as SharedAgentRunResultData,
+  AgentStatusEvent as SharedAgentStatusEvent,
+  AgentStreamEvent as SharedAgentStreamEvent,
+  AgentTextPart as SharedAgentTextPart,
+  AgentToolProgressEvent as SharedAgentToolProgressEvent,
+  AgentToolSummaryEvent as SharedAgentToolSummaryEvent,
+  AgentUnknownEvent as SharedAgentUnknownEvent,
 } from "@/lib/session-chat-types";
 import { defineResolveType } from "../gqlkit";
 import type { DateTime, JsonValue } from "./scalars";
 
-export type AgentMessageRole = "user" | "assistant" | "system";
-
-export enum AgentMessageProvider {
-  ClaudeAgentSdk = "claude-agent-sdk",
-}
-
-export type AgentMessageMetadata = {
-  createdAt?: DateTime;
-  updatedAt?: DateTime;
-  visibility?: "default" | "trace";
-  status?: "in-progress" | "done" | "error";
-  label?: string;
-  isReplay?: boolean;
-  isSynthetic?: boolean;
-  parentToolUseId?: string | null;
-  provider?: AgentMessageProvider;
-  providerSessionId?: string;
-  providerMessageType?: string;
-  providerSubtype?: string;
-  providerUuid?: string;
-  rawStoredMessageId?: string;
-};
+export type AgentMessageMetadata = SharedAgentMessageMetadata;
 
 export type AgentMessageTextPart = {
   $typeName: "AgentMessageTextPart";
   type: string;
-  text: string;
-  state?: "streaming" | "done";
+  text: SharedAgentTextPart["text"];
+  state?: string;
 };
 
 export type AgentMessageReasoningPart = {
   $typeName: "AgentMessageReasoningPart";
   type: string;
-  text: string;
-  state?: "streaming" | "done";
+  text: SharedAgentReasoningPart["text"];
+  state?: string;
 };
 
 export type AgentMessageDynamicToolPart = {
   $typeName: "AgentMessageDynamicToolPart";
   type: string;
-  toolName: string;
-  toolCallId: string;
-  title?: string;
-  providerExecuted?: boolean;
-  state:
-    | "input-streaming"
-    | "input-available"
-    | "approval-requested"
-    | "approval-responded"
-    | "output-available"
-    | "output-error"
-    | "output-denied";
+  toolName: SharedAgentDynamicToolPart["toolName"];
+  toolCallId: SharedAgentDynamicToolPart["toolCallId"];
+  title?: SharedAgentDynamicToolPart["title"];
+  providerExecuted?: SharedAgentDynamicToolPart["providerExecuted"];
+  state: string;
   input?: JsonValue;
   output?: JsonValue;
   errorText?: string;
@@ -71,50 +57,41 @@ export type AgentMessageDynamicToolPart = {
   };
 };
 
-export type AgentMessageEventKind =
-  | "tool-progress"
-  | "tool-summary"
-  | "status"
-  | "file-batch"
-  | "stream"
-  | "error"
-  | "unknown";
-
 export type AgentMessageToolProgressEvent = {
   $typeName: "AgentMessageToolProgressEvent";
-  kind: AgentMessageEventKind;
-  toolUseId: string;
-  toolName: string;
-  elapsedSeconds: number;
+  kind: string;
+  toolUseId: SharedAgentToolProgressEvent["toolUseId"];
+  toolName: SharedAgentToolProgressEvent["toolName"];
+  elapsedSeconds: SharedAgentToolProgressEvent["elapsedSeconds"];
 };
 
 export type AgentMessageToolSummaryEvent = {
   $typeName: "AgentMessageToolSummaryEvent";
-  kind: AgentMessageEventKind;
-  summary: string;
-  precedingToolUseIds: string[];
+  kind: string;
+  summary: SharedAgentToolSummaryEvent["summary"];
+  precedingToolUseIds: SharedAgentToolSummaryEvent["precedingToolUseIds"];
 };
 
 export type AgentMessageStatusEvent = {
   $typeName: "AgentMessageStatusEvent";
-  kind: AgentMessageEventKind;
-  subtype: string;
+  kind: string;
+  subtype: SharedAgentStatusEvent["subtype"];
   data: JsonValue;
 };
 
 export type AgentMessageFileBatchFile = {
-  filename: string;
-  fileId: string;
+  filename: SharedAgentFileBatchFile["filename"];
+  fileId: SharedAgentFileBatchFile["fileId"];
 };
 
 export type AgentMessageFileBatchFailure = {
-  filename: string;
-  error: string;
+  filename: SharedAgentFileBatchFailure["filename"];
+  error: SharedAgentFileBatchFailure["error"];
 };
 
 export type AgentMessageFileBatchEvent = {
   $typeName: "AgentMessageFileBatchEvent";
-  kind: AgentMessageEventKind;
+  kind: string;
   files: AgentMessageFileBatchFile[];
   failed: AgentMessageFileBatchFailure[];
   processedAt?: DateTime;
@@ -122,23 +99,23 @@ export type AgentMessageFileBatchEvent = {
 
 export type AgentMessageStreamEvent = {
   $typeName: "AgentMessageStreamEvent";
-  kind: AgentMessageEventKind;
-  eventType?: string;
+  kind: string;
+  eventType?: SharedAgentStreamEvent["eventType"];
   data: JsonValue;
 };
 
 export type AgentMessageErrorEvent = {
   $typeName: "AgentMessageErrorEvent";
-  kind: AgentMessageEventKind;
-  message: string;
-  code?: string;
+  kind: string;
+  message: SharedAgentErrorEvent["message"];
+  code?: SharedAgentErrorEvent["code"];
 };
 
 export type AgentMessageUnknownEvent = {
   $typeName: "AgentMessageUnknownEvent";
-  kind: AgentMessageEventKind;
-  rawType: string;
-  rawSubtype?: string;
+  kind: string;
+  rawType: SharedAgentUnknownEvent["rawType"];
+  rawSubtype?: SharedAgentUnknownEvent["rawSubtype"];
   data: JsonValue;
 };
 
@@ -159,12 +136,7 @@ export type AgentMessageEventPart = {
 
 export type AgentMessageResultMetrics = SharedAgentRunMetrics;
 
-export type AgentMessageResultData = {
-  subtype: string;
-  isError: boolean;
-  summaryText: string;
-  metrics?: AgentMessageResultMetrics;
-};
+export type AgentMessageResultData = SharedAgentRunResultData;
 
 export type AgentMessageResultPart = {
   $typeName: "AgentMessageResultPart";
@@ -179,9 +151,12 @@ export type AgentMessagePart =
   | AgentMessageResultPart
   | AgentMessageTextPart;
 
-export type AgentMessage = {
+export type AgentMessage = Omit<
+  SharedAgentMessage,
+  "id" | "metadata" | "parts"
+> & {
   id: IDString;
-  role: AgentMessageRole;
+  role: SharedAgentMessageRole;
   metadata?: AgentMessageMetadata;
   parts: AgentMessagePart[];
 };
@@ -213,9 +188,7 @@ function toMetadata(
     isReplay: metadata.isReplay,
     isSynthetic: metadata.isSynthetic,
     parentToolUseId: metadata.parentToolUseId,
-    provider: metadata.provider
-      ? AgentMessageProvider.ClaudeAgentSdk
-      : undefined,
+    provider: metadata.provider,
     providerSessionId: metadata.providerSessionId,
     providerMessageType: metadata.providerMessageType,
     providerSubtype: metadata.providerSubtype,

@@ -11,6 +11,9 @@ type AgentMessage {
   id: ID!
   metadata: AgentMessageMetadata
   parts: [AgentMessagePart!]!
+  """
+  The role of the message.
+  """
   role: AgentMessageRole!
 }
 
@@ -24,7 +27,7 @@ type AgentMessageDynamicToolPart {
   output: JSON
   preliminary: Boolean
   providerExecuted: Boolean
-  state: AgentMessageDynamicToolPartState!
+  state: String!
   title: String
   toolCallId: String!
   toolName: String!
@@ -43,22 +46,9 @@ type AgentMessageDynamicToolPartApproval {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageDynamicToolPartState {
-  INPUT_STREAMING
-  INPUT_AVAILABLE
-  APPROVAL_REQUESTED
-  APPROVAL_RESPONDED
-  OUTPUT_AVAILABLE
-  OUTPUT_ERROR
-  OUTPUT_DENIED
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
 type AgentMessageErrorEvent {
   code: String
-  kind: AgentMessageEventKind!
+  kind: String!
   message: String!
 }
 
@@ -77,19 +67,6 @@ union AgentMessageEventData =
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageEventKind {
-  TOOL_PROGRESS
-  TOOL_SUMMARY
-  STATUS
-  FILE_BATCH
-  STREAM
-  ERROR
-  UNKNOWN
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
 type AgentMessageEventPart {
   data: AgentMessageEventData!
   type: String!
@@ -101,7 +78,7 @@ Defined in: src/server/graphql/schema/agent-message.ts
 type AgentMessageFileBatchEvent {
   failed: [AgentMessageFileBatchFailure!]!
   files: [AgentMessageFileBatchFile!]!
-  kind: AgentMessageEventKind!
+  kind: String!
   processedAt: DateTime
 }
 
@@ -125,24 +102,31 @@ type AgentMessageFileBatchFile {
 Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageMetadata {
-  createdAt: DateTime
+  createdAt: String
   isReplay: Boolean
   isSynthetic: Boolean
   label: String
   parentToolUseId: String
-  provider: AgentMessageProvider
+  provider: AgentMessageMetadataProvider
   providerMessageType: String
   providerSessionId: String
   providerSubtype: String
   providerUuid: String
   rawStoredMessageId: String
   status: AgentMessageMetadataStatus
-  updatedAt: DateTime
+  updatedAt: String
   visibility: AgentMessageMetadataVisibility
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/lib/session-chat-types.ts
+"""
+enum AgentMessageMetadataProvider {
+  CLAUDE_AGENT_SDK
+}
+
+"""
+Defined in: src/lib/session-chat-types.ts
 """
 enum AgentMessageMetadataStatus {
   ERROR
@@ -151,7 +135,7 @@ enum AgentMessageMetadataStatus {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/lib/session-chat-types.ts
 """
 enum AgentMessageMetadataVisibility {
   DEFAULT
@@ -171,15 +155,8 @@ union AgentMessagePart =
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageProvider {
-  CLAUDE_AGENT_SDK
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
 type AgentMessageReasoningPart {
-  state: AgentMessageReasoningPartState
+  state: String
   text: String!
   type: String!
 }
@@ -187,19 +164,21 @@ type AgentMessageReasoningPart {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageReasoningPartState {
-  DONE
-  STREAMING
+type AgentMessageResultData {
+  isError: Boolean!
+  metrics: AgentMessageResultDataMetrics
+  subtype: String!
+  summaryText: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/lib/session-chat-types.ts
 """
-type AgentMessageResultData {
-  isError: Boolean!
-  metrics: AgentMessageResultMetrics
-  subtype: String!
-  summaryText: String!
+type AgentMessageResultDataMetrics {
+  durationApiMs: Float
+  durationMs: Float
+  numTurns: Float
+  totalCostUsd: Float
 }
 
 """
@@ -216,17 +195,37 @@ type AgentMessageResultMetrics {
 Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageResultPart {
-  data: AgentMessageResultData!
+  data: AgentMessageResultPartData!
   type: String!
 }
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
+type AgentMessageResultPartData {
+  isError: Boolean!
+  metrics: AgentMessageResultPartDataMetrics
+  subtype: String!
+  summaryText: String!
+}
+
+"""
+Defined in: src/lib/session-chat-types.ts
+"""
+type AgentMessageResultPartDataMetrics {
+  durationApiMs: Float
+  durationMs: Float
+  numTurns: Float
+  totalCostUsd: Float
+}
+
+"""
+Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts
+"""
 enum AgentMessageRole {
+  SYSTEM
   USER
   ASSISTANT
-  SYSTEM
 }
 
 """
@@ -234,7 +233,7 @@ Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageStatusEvent {
   data: JSON!
-  kind: AgentMessageEventKind!
+  kind: String!
   subtype: String!
 }
 
@@ -244,14 +243,14 @@ Defined in: src/server/graphql/schema/agent-message.ts
 type AgentMessageStreamEvent {
   data: JSON!
   eventType: String
-  kind: AgentMessageEventKind!
+  kind: String!
 }
 
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageTextPart {
-  state: AgentMessageTextPartState
+  state: String
   text: String!
   type: String!
 }
@@ -259,17 +258,9 @@ type AgentMessageTextPart {
 """
 Defined in: src/server/graphql/schema/agent-message.ts
 """
-enum AgentMessageTextPartState {
-  DONE
-  STREAMING
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
 type AgentMessageToolProgressEvent {
   elapsedSeconds: Float!
-  kind: AgentMessageEventKind!
+  kind: String!
   toolName: String!
   toolUseId: String!
 }
@@ -278,7 +269,7 @@ type AgentMessageToolProgressEvent {
 Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageToolSummaryEvent {
-  kind: AgentMessageEventKind!
+  kind: String!
   precedingToolUseIds: [String!]!
   summary: String!
 }
@@ -288,7 +279,7 @@ Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageUnknownEvent {
   data: JSON!
-  kind: AgentMessageEventKind!
+  kind: String!
   rawSubtype: String
   rawType: String!
 }
@@ -474,10 +465,10 @@ type SessionSshInfo {
 Defined in: src/server/graphql/schema/session.ts
 """
 enum SessionStatus {
-  ERROR
   CREATING
   RUNNING
   TERMINATED
+  ERROR
 }
 
 """

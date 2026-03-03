@@ -57,6 +57,8 @@ export type AgentMessageEventData =
       data: unknown;
     };
 
+export type AgentMessageEventKind = AgentMessageEventData["kind"];
+
 export type AgentMessageMetadata = {
   createdAt?: string;
   updatedAt?: string;
@@ -86,7 +88,21 @@ export type AgentMessage = UIMessage<
   {}
 >;
 
+export type AgentMessageRole = AgentMessage["role"];
+
 export type AgentMessagePart = AgentMessage["parts"][number];
+
+export type AgentTextPart = Extract<AgentMessagePart, { type: "text" }>;
+
+export type AgentReasoningPart = Extract<
+  AgentMessagePart,
+  { type: "reasoning" }
+>;
+
+export type AgentDynamicToolPart = Extract<
+  AgentMessagePart,
+  { type: "dynamic-tool" }
+>;
 
 export type AgentDataPart<TKey extends keyof AgentMessageData> = Extract<
   AgentMessagePart,
@@ -96,6 +112,42 @@ export type AgentDataPart<TKey extends keyof AgentMessageData> = Extract<
 export type AgentEventPart = AgentDataPart<"event">;
 
 export type AgentResultPart = AgentDataPart<"result">;
+
+export type AgentToolProgressEvent = Extract<
+  AgentMessageEventData,
+  { kind: "tool-progress" }
+>;
+
+export type AgentToolSummaryEvent = Extract<
+  AgentMessageEventData,
+  { kind: "tool-summary" }
+>;
+
+export type AgentStatusEvent = Extract<
+  AgentMessageEventData,
+  { kind: "status" }
+>;
+
+export type AgentFileBatchEvent = Extract<
+  AgentMessageEventData,
+  { kind: "file-batch" }
+>;
+
+export type AgentFileBatchFile = AgentFileBatchEvent["files"][number];
+
+export type AgentFileBatchFailure = AgentFileBatchEvent["failed"][number];
+
+export type AgentStreamEvent = Extract<
+  AgentMessageEventData,
+  { kind: "stream" }
+>;
+
+export type AgentErrorEvent = Extract<AgentMessageEventData, { kind: "error" }>;
+
+export type AgentUnknownEvent = Extract<
+  AgentMessageEventData,
+  { kind: "unknown" }
+>;
 
 export type SessionChatPendingUserInputQuestion = {
   header: string;

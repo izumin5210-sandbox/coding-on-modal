@@ -52,7 +52,7 @@ function toSessionStatus(
 }
 
 function toVisibility(
-  visibility: SessionChatPageMetadata["visibility"],
+  visibility: SessionChatPageMetadata["visibility"] | string,
 ): AgentMessageMetadata["visibility"] {
   switch (visibility) {
     case "DEFAULT":
@@ -62,11 +62,13 @@ function toVisibility(
     case undefined:
     case null:
       return undefined;
+    default:
+      return undefined;
   }
 }
 
 function toMetadataStatus(
-  status: SessionChatPageMetadata["status"],
+  status: SessionChatPageMetadata["status"] | string,
 ): AgentMessageMetadata["status"] {
   switch (status) {
     case "IN_PROGRESS":
@@ -78,11 +80,13 @@ function toMetadataStatus(
     case undefined:
     case null:
       return undefined;
+    default:
+      return undefined;
   }
 }
 
 function toProvider(
-  provider: SessionChatPageMetadata["provider"],
+  provider: SessionChatPageMetadata["provider"] | string,
 ): AgentMessageMetadata["provider"] {
   switch (provider) {
     case "CLAUDE_AGENT_SDK":
@@ -90,22 +94,31 @@ function toProvider(
     case undefined:
     case null:
       return undefined;
+    default:
+      return undefined;
   }
 }
 
-function toRole(role: SessionChatPageMessage["role"]): AgentMessage["role"] {
+function toRole(
+  role: SessionChatPageMessage["role"] | string,
+): AgentMessage["role"] {
   switch (role) {
     case "USER":
+    case "user":
       return "user";
     case "ASSISTANT":
+    case "assistant":
       return "assistant";
     case "SYSTEM":
+    case "system":
       return "system";
+    default:
+      return "assistant";
   }
 }
 
 function toTextState(
-  state: "DONE" | "STREAMING" | null | undefined,
+  state: string | null | undefined,
 ): "done" | "streaming" | undefined {
   switch (state) {
     case "DONE":
@@ -114,6 +127,8 @@ function toTextState(
       return "streaming";
     case undefined:
     case null:
+      return undefined;
+    default:
       return undefined;
   }
 }
@@ -272,6 +287,12 @@ function toDynamicToolPart(
           approved: false,
           reason: part.approval?.reason ?? undefined,
         },
+      };
+    default:
+      return {
+        ...base,
+        state: "input-available",
+        input: part.input ?? undefined,
       };
   }
 }

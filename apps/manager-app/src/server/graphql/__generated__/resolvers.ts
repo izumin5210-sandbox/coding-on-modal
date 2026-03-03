@@ -45,43 +45,17 @@ export function createResolvers({
       IN_PROGRESS: "in-progress",
       DONE: "done",
     },
-    AgentMessageTextPartState: {
-      DONE: "done",
-      STREAMING: "streaming",
+    AgentMessageMetadataProvider: {
+      CLAUDE_AGENT_SDK: "claude-agent-sdk",
     },
-    AgentMessageReasoningPartState: {
-      DONE: "done",
-      STREAMING: "streaming",
-    },
-    AgentMessageDynamicToolPartState: {
-      INPUT_STREAMING: "input-streaming",
-      INPUT_AVAILABLE: "input-available",
-      APPROVAL_REQUESTED: "approval-requested",
-      APPROVAL_RESPONDED: "approval-responded",
-      OUTPUT_AVAILABLE: "output-available",
-      OUTPUT_ERROR: "output-error",
-      OUTPUT_DENIED: "output-denied",
+    AgentMessageRole: {
+      SYSTEM: "system",
+      USER: "user",
+      ASSISTANT: "assistant",
     },
     SubmitSessionChatUserInputBehaviorInput: {
       ALLOW: "allow",
       DENY: "deny",
-    },
-    AgentMessageRole: {
-      USER: "user",
-      ASSISTANT: "assistant",
-      SYSTEM: "system",
-    },
-    AgentMessageProvider: {
-      CLAUDE_AGENT_SDK: "claude-agent-sdk",
-    },
-    AgentMessageEventKind: {
-      TOOL_PROGRESS: "tool-progress",
-      TOOL_SUMMARY: "tool-summary",
-      STATUS: "status",
-      FILE_BATCH: "file-batch",
-      STREAM: "stream",
-      ERROR: "error",
-      UNKNOWN: "unknown",
     },
     SessionChatPendingRequestKind: {
       ASK_USER_QUESTION: "ask-user-question",
@@ -91,10 +65,10 @@ export function createResolvers({
       SUBMITTED: "submitted",
     },
     SessionStatus: {
-      ERROR: "error",
       CREATING: "creating",
       RUNNING: "running",
       TERMINATED: "terminated",
+      ERROR: "error",
     },
     DateTime: scalars.DateTime,
     JSON: scalars.JSON,

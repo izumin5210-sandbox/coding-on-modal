@@ -6,43 +6,17 @@ export type Incremental<T> =
   | {
       [P in keyof T]?: P extends " $fragmentName" | "__typename" ? T[P] : never;
     };
-/** Defined in: src/server/graphql/schema/agent-message.ts */
-export type AgentMessageDynamicToolPartState =
-  | "APPROVAL_REQUESTED"
-  | "APPROVAL_RESPONDED"
-  | "INPUT_AVAILABLE"
-  | "INPUT_STREAMING"
-  | "OUTPUT_AVAILABLE"
-  | "OUTPUT_DENIED"
-  | "OUTPUT_ERROR";
+/** Defined in: src/lib/session-chat-types.ts */
+export type AgentMessageMetadataProvider = "CLAUDE_AGENT_SDK";
 
-/** Defined in: src/server/graphql/schema/agent-message.ts */
-export type AgentMessageEventKind =
-  | "ERROR"
-  | "FILE_BATCH"
-  | "STATUS"
-  | "STREAM"
-  | "TOOL_PROGRESS"
-  | "TOOL_SUMMARY"
-  | "UNKNOWN";
-
-/** Defined in: src/server/graphql/schema/agent-message.ts */
+/** Defined in: src/lib/session-chat-types.ts */
 export type AgentMessageMetadataStatus = "DONE" | "ERROR" | "IN_PROGRESS";
 
-/** Defined in: src/server/graphql/schema/agent-message.ts */
+/** Defined in: src/lib/session-chat-types.ts */
 export type AgentMessageMetadataVisibility = "DEFAULT" | "TRACE";
 
-/** Defined in: src/server/graphql/schema/agent-message.ts */
-export type AgentMessageProvider = "CLAUDE_AGENT_SDK";
-
-/** Defined in: src/server/graphql/schema/agent-message.ts */
-export type AgentMessageReasoningPartState = "DONE" | "STREAMING";
-
-/** Defined in: src/server/graphql/schema/agent-message.ts */
+/** Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts */
 export type AgentMessageRole = "ASSISTANT" | "SYSTEM" | "USER";
-
-/** Defined in: src/server/graphql/schema/agent-message.ts */
-export type AgentMessageTextPartState = "DONE" | "STREAMING";
 
 /** Defined in: src/server/graphql/schema/session.ts */
 export type CreateSessionInput = {
@@ -292,7 +266,7 @@ export type SessionChatPageQueryQuery = {
           isReplay: boolean | null;
           isSynthetic: boolean | null;
           parentToolUseId: string | null;
-          provider: AgentMessageProvider | null;
+          provider: AgentMessageMetadataProvider | null;
           providerSessionId: string | null;
           providerMessageType: string | null;
           providerSubtype: string | null;
@@ -311,7 +285,7 @@ export type SessionChatPageQueryQuery = {
               output: unknown;
               errorText: string | null;
               preliminary: boolean | null;
-              toolState: AgentMessageDynamicToolPartState;
+              toolState: string;
               approval: {
                 id: string;
                 approved: boolean | null;
@@ -324,45 +298,45 @@ export type SessionChatPageQueryQuery = {
               data:
                 | {
                     __typename: "AgentMessageErrorEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     message: string;
                     code: string | null;
                   }
                 | {
                     __typename: "AgentMessageFileBatchEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     processedAt: string | null;
                     files: Array<{ filename: string; fileId: string }>;
                     failed: Array<{ filename: string; error: string }>;
                   }
                 | {
                     __typename: "AgentMessageStatusEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     subtype: string;
                     data: unknown;
                   }
                 | {
                     __typename: "AgentMessageStreamEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     eventType: string | null;
                     data: unknown;
                   }
                 | {
                     __typename: "AgentMessageToolProgressEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     toolUseId: string;
                     toolName: string;
                     elapsedSeconds: number;
                   }
                 | {
                     __typename: "AgentMessageToolSummaryEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     summary: string;
                     precedingToolUseIds: Array<string>;
                   }
                 | {
                     __typename: "AgentMessageUnknownEvent";
-                    kind: AgentMessageEventKind;
+                    kind: string;
                     rawType: string;
                     rawSubtype: string | null;
                     data: unknown;
@@ -372,7 +346,7 @@ export type SessionChatPageQueryQuery = {
               __typename: "AgentMessageReasoningPart";
               type: string;
               text: string;
-              reasoningState: AgentMessageReasoningPartState | null;
+              reasoningState: string | null;
             }
           | {
               __typename: "AgentMessageResultPart";
@@ -393,7 +367,7 @@ export type SessionChatPageQueryQuery = {
               __typename: "AgentMessageTextPart";
               type: string;
               text: string;
-              textState: AgentMessageTextPartState | null;
+              textState: string | null;
             }
         >;
       }>;

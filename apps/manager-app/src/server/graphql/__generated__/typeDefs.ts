@@ -96,6 +96,11 @@ export const typeDefs: DocumentNode = {
               },
             },
           },
+          description: {
+            kind: "StringValue",
+            value: "The role of the message.",
+            block: true,
+          },
         },
       ],
       description: {
@@ -207,7 +212,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageDynamicToolPartState",
+                value: "String",
               },
             },
           },
@@ -344,69 +349,6 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageDynamicToolPartState",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "INPUT_STREAMING",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "INPUT_AVAILABLE",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "APPROVAL_REQUESTED",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "APPROVAL_RESPONDED",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "OUTPUT_AVAILABLE",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "OUTPUT_ERROR",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "OUTPUT_DENIED",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
@@ -439,7 +381,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -522,69 +464,6 @@ export const typeDefs: DocumentNode = {
           name: {
             kind: "Name",
             value: "AgentMessageUnknownEvent",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageEventKind",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "TOOL_PROGRESS",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "TOOL_SUMMARY",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "STATUS",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "FILE_BATCH",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "STREAM",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "ERROR",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "UNKNOWN",
           },
         },
       ],
@@ -707,7 +586,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -846,7 +725,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "DateTime",
+              value: "String",
             },
           },
         },
@@ -916,7 +795,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "AgentMessageProvider",
+              value: "AgentMessageMetadataProvider",
             },
           },
         },
@@ -1014,7 +893,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "DateTime",
+              value: "String",
             },
           },
         },
@@ -1036,6 +915,27 @@ export const typeDefs: DocumentNode = {
       description: {
         kind: "StringValue",
         value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "EnumTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageMetadataProvider",
+      },
+      values: [
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "CLAUDE_AGENT_SDK",
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/lib/session-chat-types.ts",
         block: true,
       },
     },
@@ -1070,7 +970,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/lib/session-chat-types.ts",
         block: true,
       },
     },
@@ -1098,7 +998,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/lib/session-chat-types.ts",
         block: true,
       },
     },
@@ -1152,27 +1052,6 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageProvider",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "CLAUDE_AGENT_SDK",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
@@ -1189,7 +1068,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "AgentMessageReasoningPartState",
+              value: "String",
             },
           },
         },
@@ -1235,34 +1114,6 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageReasoningPartState",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "DONE",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "STREAMING",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
@@ -1296,7 +1147,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "AgentMessageResultMetrics",
+              value: "AgentMessageResultDataMetrics",
             },
           },
         },
@@ -1338,6 +1189,76 @@ export const typeDefs: DocumentNode = {
       description: {
         kind: "StringValue",
         value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageResultDataMetrics",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "durationApiMs",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "durationMs",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "numTurns",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "totalCostUsd",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/lib/session-chat-types.ts",
         block: true,
       },
     },
@@ -1430,7 +1351,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageResultData",
+                value: "AgentMessageResultPartData",
               },
             },
           },
@@ -1460,12 +1381,168 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageResultPartData",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "isError",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "Boolean",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "metrics",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "AgentMessageResultPartDataMetrics",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "subtype",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "summaryText",
+          },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: {
+                kind: "Name",
+                value: "String",
+              },
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        block: true,
+      },
+    },
+    {
+      kind: "ObjectTypeDefinition",
+      name: {
+        kind: "Name",
+        value: "AgentMessageResultPartDataMetrics",
+      },
+      fields: [
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "durationApiMs",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "durationMs",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "numTurns",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+        {
+          kind: "FieldDefinition",
+          name: {
+            kind: "Name",
+            value: "totalCostUsd",
+          },
+          type: {
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "Float",
+            },
+          },
+        },
+      ],
+      description: {
+        kind: "StringValue",
+        value: "Defined in: src/lib/session-chat-types.ts",
+        block: true,
+      },
+    },
+    {
       kind: "EnumTypeDefinition",
       name: {
         kind: "Name",
         value: "AgentMessageRole",
       },
       values: [
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "SYSTEM",
+          },
+        },
         {
           kind: "EnumValueDefinition",
           name: {
@@ -1480,17 +1557,11 @@ export const typeDefs: DocumentNode = {
             value: "ASSISTANT",
           },
         },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "SYSTEM",
-          },
-        },
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value:
+          "Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts",
         block: true,
       },
     },
@@ -1530,7 +1601,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -1609,7 +1680,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -1638,7 +1709,7 @@ export const typeDefs: DocumentNode = {
             kind: "NamedType",
             name: {
               kind: "Name",
-              value: "AgentMessageTextPartState",
+              value: "String",
             },
           },
         },
@@ -1684,34 +1755,6 @@ export const typeDefs: DocumentNode = {
       },
     },
     {
-      kind: "EnumTypeDefinition",
-      name: {
-        kind: "Name",
-        value: "AgentMessageTextPartState",
-      },
-      values: [
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "DONE",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
-            value: "STREAMING",
-          },
-        },
-      ],
-      description: {
-        kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
-        block: true,
-      },
-    },
-    {
       kind: "ObjectTypeDefinition",
       name: {
         kind: "Name",
@@ -1747,7 +1790,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -1812,7 +1855,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -1900,7 +1943,7 @@ export const typeDefs: DocumentNode = {
               kind: "NamedType",
               name: {
                 kind: "Name",
-                value: "AgentMessageEventKind",
+                value: "String",
               },
             },
           },
@@ -3367,13 +3410,6 @@ export const typeDefs: DocumentNode = {
           kind: "EnumValueDefinition",
           name: {
             kind: "Name",
-            value: "ERROR",
-          },
-        },
-        {
-          kind: "EnumValueDefinition",
-          name: {
-            kind: "Name",
             value: "CREATING",
           },
         },
@@ -3389,6 +3425,13 @@ export const typeDefs: DocumentNode = {
           name: {
             kind: "Name",
             value: "TERMINATED",
+          },
+        },
+        {
+          kind: "EnumValueDefinition",
+          name: {
+            kind: "Name",
+            value: "ERROR",
           },
         },
       ],
