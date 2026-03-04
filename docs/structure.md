@@ -12,18 +12,25 @@
 - `apps/manager-app/src/app/page.tsx`: Session list/create/execute and agent operation UI.
 - `apps/manager-app/src/app/sessions/[id]/chat/page.tsx`: Session chat page entrypoint.
 - `apps/manager-app/src/app/sessions/[id]/chat/session-chat-page-client.tsx`: Session chat UI client component.
+- `apps/manager-app/src/components/providers/query-client-provider.tsx`: TanStack Query provider mounted at the App Router root.
 - `apps/manager-app/src/components/ai-elements/*`: Vercel AI Elements components used to compose chat UI primitives.
 - `apps/manager-app/src/components/ui/*`: shadcn/ui components generated as dependencies for AI Elements.
 - `apps/manager-app/src/app/api/auth/github/*`: GitHub OAuth login/callback endpoints.
 - `apps/manager-app/src/app/api/auth/logout/route.ts`: Session logout endpoint.
-- `apps/manager-app/src/app/api/me/route.ts`: Authenticated user profile endpoint.
-- `apps/manager-app/src/app/api/claude-token/route.ts`: Claude API key save endpoint for authenticated users.
-- `apps/manager-app/src/app/api/sessions/*`: Session CRUD / execute / agent execution APIs.
-- `apps/manager-app/src/app/api/sessions/[id]/chat/route.ts`: Session chat history fetch and chat send APIs.
-- `apps/manager-app/src/app/api/sessions/[id]/chat/user-input/route.ts`: Submit user responses for pending Claude Agent SDK user-input requests in Session chat.
+- `apps/manager-app/src/app/api/graphql/route.ts`: GraphQL endpoint for authenticated manager operations (viewer, Session CRUD, exec, chat).
 - `apps/manager-app/src/server/db/index.ts`: DB singleton creation.
 - `apps/manager-app/src/server/db/schema.ts`: Drizzle schema definition.
 - `apps/manager-app/src/server/auth/*`: JWT, OAuth, cookie handling, and authentication guards.
+- `apps/manager-app/src/server/graphql/context.ts`: GraphQL context creation with DB and authenticated viewer resolution.
+- `apps/manager-app/src/server/graphql/errors.ts`: Mapping of auth/domain/validation failures to GraphQL errors.
+- `apps/manager-app/src/server/graphql/scalars.ts`: Shared `GqlScalar` re-export surface for GraphQL `DateTime` and `JSON`.
+- `apps/manager-app/src/server/graphql/schema/agent-message.ts`: GraphQL message wrapper projection plus `resolveType` functions for Session chat message unions; top-level parts resolve by hidden `type`, and event payloads resolve by hidden `kind`.
+- `apps/manager-app/src/server/graphql/schema/agent-message-events.ts`: gqlkit schema export surface for shared event union member types used by `AgentMessageEventData`.
+- `apps/manager-app/src/server/graphql/schema/agent-message-parts.ts`: gqlkit schema export surface for shared top-level message part member types used by `AgentMessagePart`.
+- `apps/manager-app/src/server/graphql/schema/session.ts`: GraphQL Session query fields plus Session lifecycle/exec mutations.
+- `apps/manager-app/src/server/graphql/schema/viewer.ts`: GraphQL viewer query plus Claude API key save mutation.
+- `apps/manager-app/src/server/graphql/schema/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input projection types.
+- `apps/manager-app/src/server/graphql/index.ts`: gqlkit schema module export surface.
 - `apps/manager-app/src/server/users/store.ts`: User/GitHub/Claude credential persistence.
 - `apps/manager-app/src/server/crypto/token.ts`: Encryption/decryption utilities for stored credentials.
 - `apps/manager-app/src/server/sessions/service.ts`: Core session lifecycle, Session bootstrap (repository clone, GitHub credential initialization, SSH user/key bootstrap, broker startup), SSH connection metadata resolution, broker tunnel URL resolution, and execution logic.
@@ -41,12 +48,21 @@
 - `apps/manager-app/src/app/api/webhooks/[platform]/route.ts`: Chat SDK dynamic webhook route handler for Slack events.
 - `apps/manager-app/src/app/api/slack/link/route.ts`: One-time link callback for binding Slack users to app users via existing GitHub OAuth session.
 - `apps/manager-app/src/server/env.ts`: Required environment variable schema.
+- `apps/manager-app/codegen.ts`: GraphQL Code Generator config for the typed web client.
+- `apps/manager-app/src/lib/graphql/__generated__/*`: Generated typed GraphQL documents and operation result/input types for the web client.
+- `apps/manager-app/src/lib/graphql/client.ts`: Thin GraphQL fetch wrapper used by TanStack Query hooks.
+- `apps/manager-app/src/lib/graphql/operations.ts`: Co-located GraphQL operation documents for web client usage.
+- `apps/manager-app/src/lib/graphql/session-management.ts`: Viewer/Session list/detail hooks and GraphQL mutation wrappers for the home page.
+- `apps/manager-app/src/lib/graphql/session-chat.ts`: Session chat query/mutation hooks plus GraphQL-to-UIMessage mapping helpers for the shared `dynamic-tool` / `data-event` / `data-result` model.
+- `apps/manager-app/src/lib/graphql-scalar-types.ts`: Shared `GqlScalar` type definitions reused by both UI-facing shared types and gqlkit schema exports.
+- `apps/manager-app/src/lib/agent-message-event-types.ts`: Canonical Session chat event union definitions built as shared `GqlObject` types with hidden `kind` discriminators for GraphQL resolution.
+- `apps/manager-app/src/lib/agent-message-part-graphql-types.ts`: Shared GraphQL projection types for top-level Session chat message parts built as `GqlObject` types with hidden `type` discriminators.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
-- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI/API type definitions, including generalized message/parts schema for chat rendering.
+- `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`, using a reduced `data-event` / `data-result` part taxonomy as the canonical public contract.
 
 ## Responsibility Boundaries
 - UI layer: Input/output handling and user interaction orchestration.
-- API layer: HTTP boundary, validation/error handling, DB acquisition (`getDb()`), and auth guard application.
+- API layer: GraphQL boundary, validation/error handling, GraphQL context creation, and auth guard application.
 - Auth layer: OAuth callback handling, JWT issuance/verification, and user identity resolution.
 - Workflow layer: Durable orchestration of Claude chat turns via Workflow DevKit — broker SSE reading, DB persistence steps, Slack notification steps, and approval hook suspension/resumption.
 - Slack layer: Chat SDK bot for incoming event routing; Chat SDK Slack adapter for outgoing messages from workflow steps; Drizzle-based store for Slack ↔ Session/User mappings.
@@ -58,5 +74,5 @@
 
 ## Naming & Evolution Rules
 - Keep `Session` naming for new user-facing features, and confine `Sandbox` to implementation details.
-- Share JSON contracts via types in `src/lib` across UI/API.
+- Share GraphQL-facing message and helper types in `src/lib` only where they are still directly consumed by the UI; prefer schema types as the external contract.
 - For requirement changes, update `docs/product.md` first; for technical decision changes, update `docs/tech.md` first.

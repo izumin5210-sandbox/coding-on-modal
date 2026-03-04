@@ -1,13 +1,16 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resumeHook, start } from "workflow/api";
+import type { JsonValue } from "@/lib/graphql-scalar-types";
 import type {
+  AgentEventPart,
+  AgentMessage,
+  AgentMessageData,
+  AgentMessageMetadata,
+  AgentMessagePart,
+  AgentResultPart,
   GetSessionChatResponse,
   SendSessionChatMessageInput,
   SendSessionChatMessageResponse,
-  SessionChatDynamicToolPart,
-  SessionChatMessage,
-  SessionChatMessageMetadata,
-  SessionChatMessagePart,
   SessionChatPendingUserInput,
   SessionChatPendingUserInputQuestion,
   SubmitSessionChatUserInputResponse,
@@ -40,6 +43,37 @@ type SdkEnvelope = {
   message: SDKMessage;
 };
 
+type AgentDynamicToolPart = Extract<AgentMessagePart, { type: "dynamic-tool" }>;
+type AgentMessageEventData = AgentMessageData["event"];
+
+type ToolCallMarkerPart = {
+  type: "tool-call-marker";
+  toolUseId: string;
+  toolName?: string;
+  input?: unknown;
+};
+
+type ToolResultMarkerPart = {
+  type: "tool-result-marker";
+  toolUseId?: string;
+  result?: unknown;
+  isError?: boolean;
+};
+
+type NormalizedMessagePart =
+  | AgentMessagePart
+  | ToolCallMarkerPart
+  | ToolResultMarkerPart;
+
+type IntermediateMessage = {
+  id: string;
+  role: AgentMessage["role"];
+  parts: NormalizedMessagePart[];
+  createdAt: string;
+  updatedAt: string;
+  metadata?: AgentMessageMetadata;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -61,33 +95,51 @@ function omitKeys(
 }
 
 function compactMetadata(
-  metadata: SessionChatMessageMetadata,
-): SessionChatMessageMetadata | undefined {
+  metadata: AgentMessageMetadata,
+): AgentMessageMetadata | undefined {
   const entries = Object.entries(metadata).filter(
     ([, value]) => value !== undefined,
   );
   if (entries.length === 0) {
     return undefined;
   }
-  return Object.fromEntries(entries) as SessionChatMessageMetadata;
+  return Object.fromEntries(entries) as AgentMessageMetadata;
 }
 
 function mergeMetadata(
-  base: SessionChatMessageMetadata,
-  extra?: SessionChatMessageMetadata,
-): SessionChatMessageMetadata | undefined {
+  base: AgentMessageMetadata,
+  extra?: AgentMessageMetadata,
+): AgentMessageMetadata | undefined {
   return compactMetadata({
     ...base,
     ...extra,
   });
 }
 
+function toJsonValue(value: unknown): JsonValue {
+  return value as JsonValue;
+}
+
+function createEventPart(data: AgentMessageEventData): AgentEventPart {
+  return {
+    type: "data-event",
+    data,
+  };
+}
+
+function createResultPart(data: AgentMessageData["result"]): AgentResultPart {
+  return {
+    type: "data-result",
+    data,
+  };
+}
+
 function createMessage(
   envelope: SdkEnvelope,
-  role: SessionChatMessage["role"],
-  parts: SessionChatMessagePart[],
-  metadata?: SessionChatMessageMetadata,
-): SessionChatMessage {
+  role: AgentMessage["role"],
+  parts: NormalizedMessagePart[],
+  metadata?: AgentMessageMetadata,
+): IntermediateMessage {
   return {
     id: envelope.id,
     role,
@@ -95,8 +147,8 @@ function createMessage(
       parts.length > 0
         ? parts
         : [
-            {
-              type: "unknown",
+            createEventPart({
+              kind: "unknown",
               rawType:
                 getString(
                   (envelope.message as unknown as Record<string, unknown>).type,
@@ -105,8 +157,8 @@ function createMessage(
                 (envelope.message as unknown as Record<string, unknown>)
                   .subtype,
               ),
-              data: envelope.message,
-            },
+              data: toJsonValue(envelope.message),
+            }),
           ],
     createdAt: envelope.createdAt,
     updatedAt: envelope.updatedAt,
@@ -114,9 +166,7 @@ function createMessage(
   };
 }
 
-function buildProviderMetadata(
-  envelope: SdkEnvelope,
-): SessionChatMessageMetadata {
+function buildProviderMetadata(envelope: SdkEnvelope): AgentMessageMetadata {
   const raw = envelope.message as unknown as Record<string, unknown>;
   return {
     provider: "claude-agent-sdk",
@@ -140,10 +190,10 @@ function toUiThread(thread: ClaudeChatThreadStoreRecord) {
 
 function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   envelopes: SdkEnvelope[];
-  invalidMessages: SessionChatMessage[];
+  invalidMessages: IntermediateMessage[];
 } {
   const envelopes: SdkEnvelope[] = [];
-  const invalidMessages: SessionChatMessage[] = [];
+  const invalidMessages: IntermediateMessage[] = [];
 
   for (const row of rows) {
     try {
@@ -159,13 +209,13 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
         id: row.id,
         role: "system",
         parts: [
-          {
-            type: "error",
+          createEventPart({
+            kind: "error",
             code: "invalid_json",
             message: `Invalid stored SDK message JSON: ${
               error instanceof Error ? error.message : String(error)
             }`,
-          },
+          }),
         ],
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -183,16 +233,22 @@ function parseStoredSdkMessages(rows: ClaudeChatRawMessageRecord[]): {
   return { envelopes, invalidMessages };
 }
 
-function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
+function normalizeContentBlocks(blocks: unknown): NormalizedMessagePart[] {
   if (!Array.isArray(blocks)) {
     return [];
   }
 
-  const parts: SessionChatMessagePart[] = [];
+  const parts: NormalizedMessagePart[] = [];
 
   for (const block of blocks) {
     if (!isRecord(block)) {
-      parts.push({ type: "unknown", rawType: "non_object_block", data: block });
+      parts.push(
+        createEventPart({
+          kind: "unknown",
+          rawType: "non_object_block",
+          data: toJsonValue(block),
+        }),
+      );
       continue;
     }
 
@@ -206,11 +262,19 @@ function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
       continue;
     }
 
+    if (blockType === "thinking" || blockType === "reasoning") {
+      const text = getString(block.text) ?? getString(block.thinking);
+      if (text?.trim()) {
+        parts.push({ type: "reasoning", text: text.trim() });
+      }
+      continue;
+    }
+
     if (blockType === "tool_use") {
       const toolUseId =
         getString(block.id) ?? getString(block.tool_use_id) ?? "unknown";
       parts.push({
-        type: "tool-call",
+        type: "tool-call-marker",
         toolUseId,
         toolName: getString(block.name),
         input: block.input,
@@ -220,7 +284,7 @@ function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
 
     if (blockType === "tool_result") {
       parts.push({
-        type: "tool-result",
+        type: "tool-result-marker",
         toolUseId: getString(block.tool_use_id),
         result: "content" in block ? block.content : block,
         isError: getBoolean(block.is_error),
@@ -228,11 +292,13 @@ function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
       continue;
     }
 
-    parts.push({
-      type: "unknown",
-      rawType: blockType,
-      data: block,
-    });
+    parts.push(
+      createEventPart({
+        kind: "unknown",
+        rawType: blockType,
+        data: toJsonValue(block),
+      }),
+    );
   }
 
   return parts;
@@ -240,7 +306,7 @@ function normalizeContentBlocks(blocks: unknown): SessionChatMessagePart[] {
 
 function normalizeMessageParamToParts(
   messageParam: unknown,
-): SessionChatMessagePart[] {
+): NormalizedMessagePart[] {
   if (typeof messageParam === "string") {
     const text = messageParam.trim();
     return text ? [{ type: "text", text }] : [];
@@ -248,7 +314,11 @@ function normalizeMessageParamToParts(
 
   if (!isRecord(messageParam)) {
     return [
-      { type: "unknown", rawType: "user_message_param", data: messageParam },
+      createEventPart({
+        kind: "unknown",
+        rawType: "user_message_param",
+        data: toJsonValue(messageParam),
+      }),
     ];
   }
 
@@ -262,7 +332,11 @@ function normalizeMessageParamToParts(
   }
 
   return [
-    { type: "unknown", rawType: "user_message_param", data: messageParam },
+    createEventPart({
+      kind: "unknown",
+      rawType: "user_message_param",
+      data: toJsonValue(messageParam),
+    }),
   ];
 }
 
@@ -294,7 +368,7 @@ function createDynamicToolInputPart(
   toolCallId: string,
   input: unknown,
   state: "input-available" | "input-streaming" = "input-available",
-): SessionChatDynamicToolPart {
+): AgentDynamicToolPart {
   return {
     type: "dynamic-tool",
     toolName,
@@ -310,7 +384,7 @@ function createDynamicToolOutputPart(
   input: unknown,
   result: unknown,
   isError: boolean,
-): SessionChatDynamicToolPart {
+): AgentDynamicToolPart {
   if (isError) {
     return {
       type: "dynamic-tool",
@@ -344,26 +418,28 @@ function buildResultSummaryText(
 function statusPartFromRecord(
   subtype: string,
   record: Record<string, unknown>,
-): SessionChatMessagePart {
-  return {
-    type: "status",
+): AgentEventPart {
+  return createEventPart({
+    kind: "status",
     subtype,
-    data: omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
-  };
+    data: toJsonValue(
+      omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
+    ),
+  });
 }
 
-function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
+function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
   const message = envelope.message;
   const baseMetadata = buildProviderMetadata(envelope);
 
   if (message.type === "user") {
     const parts = normalizeMessageParamToParts(message.message);
     const hasToolResultInContent = parts.some(
-      (part) => part.type === "tool-result",
+      (part) => part.type === "tool-result-marker",
     );
     if (message.tool_use_result !== undefined && !hasToolResultInContent) {
       parts.unshift({
-        type: "tool-result",
+        type: "tool-result-marker",
         toolUseId:
           message.parent_tool_use_id ??
           extractToolUseIdFromUnknown(message.tool_use_result),
@@ -375,7 +451,9 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       message.isSynthetic === true ||
       message.parent_tool_use_id !== null ||
       message.tool_use_result !== undefined;
-    const hasToolResult = parts.some((part) => part.type === "tool-result");
+    const hasToolResult = parts.some(
+      (part) => part.type === "tool-result-marker",
+    );
 
     const role = isSyntheticLike ? "assistant" : "user";
     return createMessage(
@@ -396,11 +474,13 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
   if (message.type === "assistant") {
     const parts = normalizeContentBlocks(message.message.content);
     if (message.error) {
-      parts.push({
-        type: "error",
-        code: message.error,
-        message: `Assistant message error: ${message.error}`,
-      });
+      parts.push(
+        createEventPart({
+          kind: "error",
+          code: message.error,
+          message: `Assistant message error: ${message.error}`,
+        }),
+      );
     }
     return createMessage(
       envelope,
@@ -417,12 +497,12 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "tool-progress",
+        createEventPart({
+          kind: "tool-progress",
           toolUseId: message.tool_use_id,
           toolName: message.tool_name,
           elapsedSeconds: message.elapsed_time_seconds,
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -437,11 +517,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "tool-summary",
+        createEventPart({
+          kind: "tool-summary",
           summary: message.summary,
           precedingToolUseIds: message.preceding_tool_use_ids,
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -455,8 +535,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       envelope,
       "system",
       [
-        {
-          type: "result",
+        createResultPart({
           subtype: message.subtype,
           isError: message.is_error,
           summaryText: buildResultSummaryText(message),
@@ -466,7 +545,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
             numTurns: message.num_turns,
             totalCostUsd: message.total_cost_usd,
           },
-        },
+        }),
       ],
       mergeMetadata(baseMetadata, {
         status: message.is_error ? "error" : "done",
@@ -480,15 +559,15 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       envelope,
       "system",
       [
-        {
-          type: "status",
+        createEventPart({
+          kind: "status",
           subtype: "auth_status",
-          data: {
+          data: toJsonValue({
             isAuthenticating: message.isAuthenticating,
             output: message.output,
             error: message.error,
-          },
-        },
+          }),
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -505,11 +584,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
       envelope,
       "assistant",
       [
-        {
-          type: "stream-event",
+        createEventPart({
+          kind: "stream",
           eventType,
-          data: message.event,
-        },
+          data: toJsonValue(message.event),
+        }),
       ],
       mergeMetadata(baseMetadata, {
         visibility: "trace",
@@ -524,8 +603,8 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
         envelope,
         "system",
         [
-          {
-            type: "file-batch",
+          createEventPart({
+            kind: "file-batch",
             files: message.files.map((file) => ({
               filename: file.filename,
               fileId: file.file_id,
@@ -535,7 +614,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
               error: file.error,
             })),
             processedAt: message.processed_at,
-          },
+          }),
         ],
         mergeMetadata(baseMetadata, {
           visibility: "trace",
@@ -564,12 +643,12 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
     envelope,
     "system",
     [
-      {
-        type: "unknown",
+      createEventPart({
+        kind: "unknown",
         rawType: (message as unknown as { type?: string }).type ?? "unknown",
         rawSubtype: (message as unknown as { subtype?: string }).subtype,
-        data: message,
-      },
+        data: toJsonValue(message),
+      }),
     ],
     mergeMetadata(baseMetadata, {
       visibility: "trace",
@@ -579,26 +658,26 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): SessionChatMessage {
 }
 
 function synthesizeDynamicToolParts(
-  messages: SessionChatMessage[],
-): SessionChatMessage[] {
+  messages: IntermediateMessage[],
+): IntermediateMessage[] {
   type ToolRef = {
-    message: SessionChatMessage;
+    message: IntermediateMessage;
     partIndex: number;
   };
 
   const toolRefById = new Map<string, ToolRef>();
   const toolNameById = new Map<string, string>();
-  const transformed: SessionChatMessage[] = [];
+  const transformed: IntermediateMessage[] = [];
 
   for (const sourceMessage of messages) {
-    const message: SessionChatMessage = {
+    const message: IntermediateMessage = {
       ...sourceMessage,
       parts: [],
     };
     transformed.push(message);
 
     for (const part of sourceMessage.parts) {
-      if (part.type === "tool-call") {
+      if (part.type === "tool-call-marker") {
         const toolName = part.toolName ?? "tool";
         const dynamicPart = createDynamicToolInputPart(
           toolName,
@@ -611,8 +690,8 @@ function synthesizeDynamicToolParts(
         continue;
       }
 
-      if (part.type === "tool-progress") {
-        const existingRef = toolRefById.get(part.toolUseId);
+      if (part.type === "data-event" && part.data.kind === "tool-progress") {
+        const existingRef = toolRefById.get(part.data.toolUseId);
         if (existingRef) {
           const current = existingRef.message.parts[existingRef.partIndex];
           if (
@@ -633,7 +712,7 @@ function synthesizeDynamicToolParts(
         continue;
       }
 
-      if (part.type === "tool-result") {
+      if (part.type === "tool-result-marker") {
         const toolCallId = part.toolUseId;
         const existingRef = toolCallId
           ? toolRefById.get(toolCallId)
@@ -679,7 +758,7 @@ function synthesizeDynamicToolParts(
   return transformed.filter((message) => message.parts.length > 0);
 }
 
-function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
+function sortMessages(messages: IntermediateMessage[]): IntermediateMessage[] {
   return [...messages].sort((a, b) => {
     if (a.createdAt === b.createdAt) {
       return a.id.localeCompare(b.id);
@@ -688,15 +767,35 @@ function sortMessages(messages: SessionChatMessage[]): SessionChatMessage[] {
   });
 }
 
-function toApiMessages(
-  rows: ClaudeChatRawMessageRecord[],
-): SessionChatMessage[] {
+function toAgentMessage(message: IntermediateMessage): AgentMessage {
+  const parts = message.parts.filter(
+    (part): part is AgentMessagePart =>
+      part.type !== "tool-call-marker" && part.type !== "tool-result-marker",
+  );
+
+  const metadata = compactMetadata({
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    ...(message.metadata ?? {}),
+  });
+
+  return {
+    id: message.id,
+    role: message.role,
+    parts,
+    metadata,
+  };
+}
+
+function toApiMessages(rows: ClaudeChatRawMessageRecord[]): AgentMessage[] {
   const { envelopes, invalidMessages } = parseStoredSdkMessages(rows);
   const normalized = envelopes.map((envelope) =>
     normalizeSdkEnvelope(envelope),
   );
   const sorted = sortMessages([...normalized, ...invalidMessages]);
-  return synthesizeDynamicToolParts(sorted);
+  return synthesizeDynamicToolParts(sorted).map((message) =>
+    toAgentMessage(message),
+  );
 }
 
 type SubmitSessionClaudeChatUserInputInput = {

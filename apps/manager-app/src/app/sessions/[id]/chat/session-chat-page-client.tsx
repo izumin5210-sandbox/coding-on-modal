@@ -35,29 +35,22 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import {
+  useSendSessionChatMessageMutation,
+  useSessionChatQuery,
+  useSubmitSessionChatUserInputMutation,
+} from "@/lib/graphql/session-chat";
 import type {
-  GetSessionChatResponse,
-  SessionChatMessage,
-  SessionChatMessagePart,
+  AgentMessage,
+  AgentMessagePart,
   SessionChatPendingUserInput,
   SessionChatPendingUserInputAnswerValue,
 } from "@/lib/session-chat-types";
 import { cn } from "@/lib/utils";
 
-type ApiError = {
-  error?: {
-    message?: string;
-  };
-};
-
 function formatTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-}
-
-async function parseError(response: Response): Promise<string> {
-  const body = (await response.json().catch(() => null)) as ApiError | null;
-  return body?.error?.message ?? `Request failed (${response.status})`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -173,13 +166,6 @@ function PendingToolCallBanner({
   );
 }
 
-type ToolOutcomeState = "output-available" | "output-error";
-
-type ToolPresentationIndex = {
-  nameById: Map<string, string>;
-  outcomeById: Map<string, ToolOutcomeState>;
-};
-
 function ToolLogCard({
   toolName,
   toolUseId,
@@ -224,16 +210,20 @@ function ToolLogCard({
   );
 }
 
-function PartView({
-  part,
-  toolIndex,
-}: {
-  part: SessionChatMessagePart;
-  toolIndex: ToolPresentationIndex;
-}) {
+function PartView({ part }: { part: AgentMessagePart }) {
   switch (part.type) {
     case "text":
       return <MessageResponse>{part.text}</MessageResponse>;
+
+    case "reasoning":
+      return (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-3 text-sm text-slate-700">
+          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Reasoning
+          </div>
+          <MessageResponse>{part.text}</MessageResponse>
+        </div>
+      );
 
     case "dynamic-tool":
       return (
@@ -255,75 +245,12 @@ function PartView({
         />
       );
 
-    case "tool-call": {
-      const toolState =
-        (part.toolUseId
-          ? toolIndex.outcomeById.get(part.toolUseId)
-          : undefined) ?? "input-available";
-      return (
-        <ToolLogCard
-          toolName={part.toolName ?? "tool"}
-          toolUseId={part.toolUseId}
-          state={toolState}
-          input={part.input}
-        />
-      );
-    }
-
-    case "tool-result":
-      return (
-        <ToolLogCard
-          toolName={
-            (part.toolUseId
-              ? toolIndex.nameById.get(part.toolUseId)
-              : undefined) ?? "tool-result"
-          }
-          toolUseId={part.toolUseId}
-          state={part.isError ? "output-error" : "output-available"}
-          output={part.result}
-          errorText={
-            part.isError && typeof part.result === "string"
-              ? part.result
-              : undefined
-          }
-        />
-      );
-
-    case "tool-progress":
-      return (
-        <ToolLogCard
-          toolName={part.toolName}
-          toolUseId={part.toolUseId}
-          state="input-streaming"
-          meta={
-            <p className="text-xs text-muted-foreground">
-              elapsed: {part.elapsedSeconds.toFixed(1)}s
-            </p>
-          }
-        />
-      );
-
-    case "tool-summary":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm text-slate-900">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Tool Summary
-          </div>
-          <MessageResponse>{part.summary}</MessageResponse>
-          {part.precedingToolUseIds.length > 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
-              IDs: {part.precedingToolUseIds.join(", ")}
-            </p>
-          ) : null}
-        </div>
-      );
-
-    case "result":
+    case "data-result":
       return (
         <div
           className={cn(
             "rounded-xl border p-3 text-sm",
-            part.isError
+            part.data.isError
               ? "border-rose-200 bg-rose-50/80 text-rose-950"
               : "border-slate-200 bg-white/80 text-slate-900",
           )}
@@ -332,92 +259,116 @@ function PartView({
             <span className="font-semibold uppercase tracking-[0.12em]">
               Run Result
             </span>
-            <span>{part.subtype}</span>
+            <span>{part.data.subtype}</span>
           </div>
-          <MessageResponse>{part.summaryText}</MessageResponse>
-          {part.metrics ? (
+          <MessageResponse>{part.data.summaryText}</MessageResponse>
+          {part.data.metrics ? (
             <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
-              <p>Turns: {part.metrics.numTurns ?? "-"}</p>
-              <p>Cost: {part.metrics.totalCostUsd ?? "-"}</p>
-              <p>Duration: {part.metrics.durationMs ?? "-"}ms</p>
-              <p>API: {part.metrics.durationApiMs ?? "-"}ms</p>
+              <p>Turns: {part.data.metrics.numTurns ?? "-"}</p>
+              <p>Cost: {part.data.metrics.totalCostUsd ?? "-"}</p>
+              <p>Duration: {part.data.metrics.durationMs ?? "-"}ms</p>
+              <p>API: {part.data.metrics.durationApiMs ?? "-"}ms</p>
             </div>
           ) : null}
         </div>
       );
 
-    case "status":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Status · {part.subtype}
-          </div>
-          <JsonDetails label="Data" value={part.data} />
-        </div>
-      );
-
-    case "file-batch":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Files Persisted
-          </div>
-          <p className="text-xs text-slate-600">
-            files: {part.files.length} · failed: {part.failed.length}
-            {part.processedAt ? ` · ${part.processedAt}` : ""}
-          </p>
-          <div className="mt-2 space-y-2">
-            <JsonDetails label="Files" value={part.files} />
-            {part.failed.length > 0 ? (
-              <JsonDetails label="Failed" value={part.failed} />
-            ) : null}
-          </div>
-        </div>
-      );
-
-    case "stream-event":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Stream Event{part.eventType ? ` · ${part.eventType}` : ""}
-          </div>
-          <JsonDetails label="Event" value={part.data} />
-        </div>
-      );
-
-    case "error":
-      return (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-950">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">
-            Error{part.code ? ` · ${part.code}` : ""}
-          </div>
-          <MessageResponse>{part.message}</MessageResponse>
-        </div>
-      );
-
-    case "unknown":
-      return (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-            Unknown · {part.rawType}
-            {part.rawSubtype ? ` / ${part.rawSubtype}` : ""}
-          </div>
-          <JsonDetails label="Raw" value={part.data} />
-        </div>
-      );
+    case "data-event":
+      switch (part.data.kind) {
+        case "tool-progress":
+          return (
+            <ToolLogCard
+              toolName={part.data.toolName}
+              toolUseId={part.data.toolUseId}
+              state="input-streaming"
+              meta={
+                <p className="text-xs text-muted-foreground">
+                  elapsed: {part.data.elapsedSeconds.toFixed(1)}s
+                </p>
+              }
+            />
+          );
+        case "tool-summary":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-white/80 p-3 text-sm text-slate-900">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Tool Summary
+              </div>
+              <MessageResponse>{part.data.summary}</MessageResponse>
+              {part.data.precedingToolUseIds.length > 0 ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  IDs: {part.data.precedingToolUseIds.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          );
+        case "status":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Status · {part.data.subtype}
+              </div>
+              <JsonDetails label="Data" value={part.data.data} />
+            </div>
+          );
+        case "file-batch":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Files Persisted
+              </div>
+              <p className="text-xs text-slate-600">
+                files: {part.data.files.length} · failed:{" "}
+                {part.data.failed.length}
+                {part.data.processedAt ? ` · ${part.data.processedAt}` : ""}
+              </p>
+              <div className="mt-2 space-y-2">
+                <JsonDetails label="Files" value={part.data.files} />
+                {part.data.failed.length > 0 ? (
+                  <JsonDetails label="Failed" value={part.data.failed} />
+                ) : null}
+              </div>
+            </div>
+          );
+        case "stream":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Stream Event
+                {part.data.eventType ? ` · ${part.data.eventType}` : ""}
+              </div>
+              <JsonDetails label="Event" value={part.data.data} />
+            </div>
+          );
+        case "error":
+          return (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-sm text-rose-950">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-rose-700">
+                Error{part.data.code ? ` · ${part.data.code}` : ""}
+              </div>
+              <MessageResponse>{part.data.message}</MessageResponse>
+            </div>
+          );
+        case "unknown":
+          return (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-sm text-slate-900">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+                Unknown · {part.data.rawType}
+                {part.data.rawSubtype ? ` / ${part.data.rawSubtype}` : ""}
+              </div>
+              <JsonDetails label="Raw" value={part.data.data} />
+            </div>
+          );
+        default:
+          return null;
+      }
 
     default:
       return null;
   }
 }
 
-function TranscriptMessage({
-  message,
-  toolIndex,
-}: {
-  message: SessionChatMessage;
-  toolIndex: ToolPresentationIndex;
-}) {
+function TranscriptMessage({ message }: { message: AgentMessage }) {
   const isTrace = message.metadata?.visibility === "trace";
   const isSystem = message.role === "system";
   const from = message.role === "user" ? "user" : "assistant";
@@ -439,15 +390,11 @@ function TranscriptMessage({
             {message.metadata?.label ? ` · ${message.metadata.label}` : ""}
             {isTrace ? " · trace" : ""}
           </span>
-          <span>{formatTime(message.createdAt)}</span>
+          <span>{formatTime(message.metadata?.createdAt ?? "")}</span>
         </div>
         <div className="space-y-2">
           {message.parts.map((part, index) => (
-            <PartView
-              key={`${message.id}:${part.type}:${index}`}
-              part={part}
-              toolIndex={toolIndex}
-            />
+            <PartView key={`${message.id}:${part.type}:${index}`} part={part} />
           ))}
         </div>
       </MessageContent>
@@ -628,9 +575,6 @@ export default function SessionChatPageClient({
 }: {
   sessionId: string;
 }) {
-  const [data, setData] = useState<GetSessionChatResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [cwd, setCwd] = useState("");
@@ -647,102 +591,67 @@ export default function SessionChatPageClient({
   const [pendingAskOtherAnswers, setPendingAskOtherAnswers] = useState<
     Record<string, string>
   >({});
+  const chatQuery = useSessionChatQuery(sessionId);
+  const sendMessageMutation = useSendSessionChatMessageMutation(sessionId);
+  const submitPendingUserInputMutation =
+    useSubmitSessionChatUserInputMutation(sessionId);
+  const data = chatQuery.data ?? null;
+  const loading = chatQuery.isPending;
+  const sending = sendMessageMutation.isPending;
+  const refreshing = chatQuery.isFetching && !chatQuery.isPending;
 
-  const refreshChat = useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (!silent) {
-        setLoading(true);
-        setError(null);
-      }
-      try {
-        const response = await fetch(`/api/sessions/${sessionId}/chat`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
-        const body = (await response.json()) as GetSessionChatResponse;
-        setData(body);
-        setCwd(
-          (current) => current || body.thread.cwd || body.session.workspacePath,
-        );
-        setMaxTurns((current) => current || String(body.thread.maxTurns || 8));
-      } catch (loadError) {
-        if (!silent) {
-          setError(
-            loadError instanceof Error ? loadError.message : String(loadError),
-          );
-        }
-      } finally {
-        if (!silent) {
-          setLoading(false);
-        }
-      }
-    },
-    [sessionId],
-  );
-
-  const loadChat = useCallback(async () => {
-    await refreshChat();
-  }, [refreshChat]);
+  const refreshChat = useCallback(async () => {
+    setError(null);
+    await chatQuery.refetch();
+  }, [chatQuery]);
 
   const submitPrompt = useCallback(
     async (text: string) => {
-      if (!data || sending) {
-        return;
-      }
-
       const trimmedPrompt = text.trim();
       if (!trimmedPrompt) {
         throw new Error("Prompt must not be empty.");
       }
 
-      setSending(true);
       setError(null);
       setNotice(null);
 
       try {
         const maxTurnsNumber = Number(maxTurns);
-        const response = await fetch(`/api/sessions/${sessionId}/chat`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            prompt: trimmedPrompt,
-            cwd: cwd.trim() || undefined,
-            maxTurns: Number.isFinite(maxTurnsNumber)
-              ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
-              : undefined,
-          }),
+        await sendMessageMutation.mutateAsync({
+          prompt: trimmedPrompt,
+          cwd: cwd.trim() || undefined,
+          maxTurns: Number.isFinite(maxTurnsNumber)
+            ? Math.max(1, Math.min(20, Math.floor(maxTurnsNumber)))
+            : undefined,
         });
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
-
-        // Workflow started asynchronously; refresh to pick up isRunning=true so polling begins
         setNotice("Run submitted. Waiting for results...");
-        await refreshChat({ silent: true });
+        await chatQuery.refetch();
       } catch (sendError) {
         const message =
           sendError instanceof Error ? sendError.message : String(sendError);
         setError(message);
         throw sendError;
-      } finally {
-        setSending(false);
       }
     },
-    [cwd, data, maxTurns, refreshChat, sending, sessionId],
+    [chatQuery, cwd, maxTurns, sendMessageMutation],
   );
 
   useEffect(() => {
-    void loadChat();
-  }, [loadChat]);
+    if (!data) {
+      return;
+    }
+
+    setCwd(
+      (current) => current || data.thread.cwd || data.session.workspacePath,
+    );
+    setMaxTurns((current) => current || String(data.thread.maxTurns || 8));
+  }, [data]);
 
   const pendingUserInput = data?.pendingUserInput ?? null;
   const pendingToolUseId = pendingUserInput?.toolUseId ?? null;
 
   useEffect(() => {
     setPendingSubmitError(null);
-    setPendingSubmitting(false);
     if (pendingToolUseId) {
       setPendingDenyMessage("");
       setPendingAskSelections({});
@@ -765,28 +674,18 @@ export default function SessionChatPageClient({
       setPendingSubmitting(true);
       setPendingSubmitError(null);
       try {
-        const response = await fetch(
-          `/api/sessions/${sessionId}/chat/user-input`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              toolUseId: pendingUserInput.toolUseId,
-              behavior: payload.behavior,
-              answers: payload.answers,
-              message: payload.message,
-            }),
-          },
-        );
-        if (!response.ok) {
-          throw new Error(await parseError(response));
-        }
+        await submitPendingUserInputMutation.mutateAsync({
+          toolUseId: pendingUserInput.toolUseId,
+          behavior: payload.behavior,
+          answers: payload.answers,
+          message: payload.message,
+        });
         setNotice(
           payload.behavior === "allow"
             ? `Submitted response for ${pendingUserInput.toolName}.`
             : `Denied ${pendingUserInput.toolName}.`,
         );
-        await refreshChat({ silent: true });
+        await chatQuery.refetch();
       } catch (submitError) {
         setPendingSubmitError(
           submitError instanceof Error
@@ -797,7 +696,12 @@ export default function SessionChatPageClient({
         setPendingSubmitting(false);
       }
     },
-    [pendingSubmitting, pendingUserInput, refreshChat, sessionId],
+    [
+      chatQuery,
+      pendingSubmitting,
+      pendingUserInput,
+      submitPendingUserInputMutation,
+    ],
   );
 
   const handleApprovePendingUserInput = useCallback(async () => {
@@ -879,44 +783,6 @@ export default function SessionChatPageClient({
     [data?.messages],
   );
 
-  const toolIndex = useMemo<ToolPresentationIndex>(() => {
-    const nameById = new Map<string, string>();
-    const outcomeById = new Map<string, ToolOutcomeState>();
-
-    for (const message of data?.messages ?? []) {
-      for (const part of message.parts) {
-        if (part.type === "tool-call") {
-          if (
-            part.toolUseId &&
-            part.toolName &&
-            !nameById.has(part.toolUseId)
-          ) {
-            nameById.set(part.toolUseId, part.toolName);
-          }
-          continue;
-        }
-        if (part.type === "tool-result" && part.toolUseId) {
-          outcomeById.set(
-            part.toolUseId,
-            part.isError ? "output-error" : "output-available",
-          );
-        }
-      }
-    }
-
-    return { nameById, outcomeById };
-  }, [data?.messages]);
-
-  useEffect(() => {
-    if (!(sending || data?.thread.isRunning || pendingUserInput)) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      void refreshChat({ silent: true });
-    }, 1500);
-    return () => window.clearInterval(timer);
-  }, [data?.thread.isRunning, pendingUserInput, refreshChat, sending]);
-
   const session = data?.session ?? null;
   const thread = data?.thread ?? null;
   const isSessionTerminated = session?.status === "terminated";
@@ -925,6 +791,9 @@ export default function SessionChatPageClient({
     loading || sending || isThreadRunning || isSessionTerminated;
   const submitStatus =
     inputDisabled && (sending || isThreadRunning) ? "submitted" : "ready";
+  const fetchError =
+    chatQuery.error instanceof Error ? chatQuery.error.message : null;
+  const effectiveError = error ?? fetchError;
 
   return (
     <main className="h-screen bg-[radial-gradient(circle_at_top_left,_#e0f2fe,_transparent_45%),radial-gradient(circle_at_top_right,_#fde68a,_transparent_40%),#f8fafc] p-3 sm:p-4">
@@ -983,18 +852,18 @@ export default function SessionChatPageClient({
               <button
                 type="button"
                 onClick={() => {
-                  void loadChat();
+                  void refreshChat();
                 }}
-                disabled={loading || sending}
+                disabled={refreshing || sending}
                 className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {loading ? "Refreshing..." : "Refresh"}
+                {refreshing ? "Refreshing..." : "Refresh"}
               </button>
             </div>
           </div>
-          {error ? (
+          {effectiveError ? (
             <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {error}
+              {effectiveError}
             </p>
           ) : null}
           {notice ? (
@@ -1015,11 +884,7 @@ export default function SessionChatPageClient({
                 />
               ) : visibleMessages.length > 0 ? (
                 visibleMessages.map((message) => (
-                  <TranscriptMessage
-                    key={message.id}
-                    message={message}
-                    toolIndex={toolIndex}
-                  />
+                  <TranscriptMessage key={message.id} message={message} />
                 ))
               ) : (
                 <ConversationEmptyState

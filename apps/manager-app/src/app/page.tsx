@@ -1,8 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AuthUser, MeResponse } from "@/lib/auth-types";
-import type { SessionExecResult, SessionRecord } from "@/lib/session-types";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import type { SessionExecResult } from "@/lib/session-types";
+import {
+  getSessionDetailQueryKey,
+  getSessionsQueryKey,
+  getViewerQueryKey,
+  useCreateSessionMutation,
+  useExecuteSessionMutation,
+  useSaveClaudeApiKeyMutation,
+  useSessionDetailQuery,
+  useSessionsQuery,
+  useTerminateSessionMutation,
+  useViewerQuery,
+} from "@/lib/graphql/session-management";
 
 type ApiError = {
   error?: {
@@ -10,22 +22,10 @@ type ApiError = {
   };
 };
 
-type SessionListResponse = {
-  sessions: SessionRecord[];
-};
-
-type SessionResponse = {
-  session: SessionRecord;
-};
-
 type CreateSessionPayload = {
   name?: string;
   repoUrl?: string;
   repoRef?: string;
-};
-
-type ExecResponse = {
-  result: SessionExecResult;
 };
 
 async function parseError(response: Response): Promise<string> {
@@ -39,14 +39,8 @@ function formatTime(iso: string): string {
 }
 
 export default function Home() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [claudeApiKeyConfigured, setClaudeApiKeyConfigured] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
-
-  const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,130 +57,68 @@ export default function Home() {
 
   const [isClaudeApiKeyModalOpen, setIsClaudeApiKeyModalOpen] = useState(false);
   const [claudeApiKeyInput, setClaudeApiKeyInput] = useState("");
-  const [claudeApiKeySaving, setClaudeApiKeySaving] = useState(false);
   const [claudeApiKeyError, setClaudeApiKeyError] = useState<string | null>(
     null,
   );
   const [pendingCreatePayload, setPendingCreatePayload] =
     useState<CreateSessionPayload | null>(null);
+  const queryClient = useQueryClient();
+  const viewerQuery = useViewerQuery();
+  const viewer = viewerQuery.data;
+  const user = viewer?.user ?? null;
+  const claudeApiKeyConfigured = viewer?.claudeApiKeyConfigured ?? false;
+  const sessionsQuery = useSessionsQuery(user !== null);
+  const sessions = sessionsQuery.data ?? [];
+  const sessionDetailQuery = useSessionDetailQuery(selectedId, user !== null);
+  const createSessionMutation = useCreateSessionMutation();
+  const saveClaudeApiKeyMutation = useSaveClaudeApiKeyMutation();
+  const terminateSessionMutation = useTerminateSessionMutation(selectedId);
+  const executeSessionMutation = useExecuteSessionMutation(selectedId);
+  const authLoading = viewerQuery.isPending;
+  const loading = sessionsQuery.isPending || sessionsQuery.isFetching;
+  const claudeApiKeySaving = saveClaudeApiKeyMutation.isPending;
 
-  const selectedSession = useMemo(
+  const selectedSessionSummary = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
     [sessions, selectedId],
   );
+  const selectedSession = sessionDetailQuery.data ?? selectedSessionSummary;
 
-  const onUnauthorized = useCallback(() => {
-    setUser(null);
-    setClaudeApiKeyConfigured(false);
-    setSessions([]);
-    setSelectedId(null);
-    setExecResult(null);
-    setPendingCreatePayload(null);
-    setIsClaudeApiKeyModalOpen(false);
-    setClaudeApiKeyInput("");
-    setClaudeApiKeyError(null);
-    setMessage(null);
-    setError("Authentication required. Please sign in with GitHub.");
-  }, []);
+  const queryErrorMessage =
+    viewerQuery.error?.message ??
+    sessionsQuery.error?.message ??
+    sessionDetailQuery.error?.message ??
+    null;
 
-  const ensureResponseOk = useCallback(
-    async (response: Response) => {
-      if (response.status === 401) {
-        onUnauthorized();
-        throw new Error("Authentication required");
-      }
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
-    },
-    [onUnauthorized],
-  );
+  async function refreshSessions(preferredId?: string) {
+    setError(null);
 
-  const loadMe = useCallback(async () => {
-    setAuthLoading(true);
     try {
-      const response = await fetch("/api/me", { cache: "no-store" });
-      if (response.status === 401) {
-        setUser(null);
-        setClaudeApiKeyConfigured(false);
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(await parseError(response));
-      }
+      const result = await sessionsQuery.refetch();
+      const nextSessions = result.data ?? [];
 
-      const body = (await response.json()) as MeResponse;
-      setUser(body.user);
-      setClaudeApiKeyConfigured(body.claudeApiKeyConfigured);
+      setSelectedId((currentSelectedId) => {
+        if (preferredId) {
+          return preferredId;
+        }
+
+        if (
+          currentSelectedId &&
+          nextSessions.some((session) => session.id === currentSelectedId)
+        ) {
+          return currentSelectedId;
+        }
+
+        return nextSessions[0]?.id ?? null;
+      });
     } catch (loadError) {
       setError(
         loadError instanceof Error ? loadError.message : String(loadError),
       );
-      setUser(null);
-      setClaudeApiKeyConfigured(false);
-    } finally {
-      setAuthLoading(false);
     }
-  }, []);
+  }
 
-  const loadSessions = useCallback(
-    async (preferredId?: string) => {
-      if (!user) {
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch("/api/sessions", { cache: "no-store" });
-        await ensureResponseOk(response);
-
-        const body = (await response.json()) as SessionListResponse;
-        setSessions(body.sessions);
-
-        setSelectedId((currentSelectedId) => {
-          if (preferredId) {
-            return preferredId;
-          }
-
-          if (
-            currentSelectedId &&
-            body.sessions.some((session) => session.id === currentSelectedId)
-          ) {
-            return currentSelectedId;
-          }
-
-          return body.sessions[0]?.id ?? null;
-        });
-      } catch (loadError) {
-        setError(
-          loadError instanceof Error ? loadError.message : String(loadError),
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [ensureResponseOk, user],
-  );
-
-  const loadSessionDetail = useCallback(
-    async (id: string) => {
-      const response = await fetch(`/api/sessions/${id}`, {
-        cache: "no-store",
-      });
-      await ensureResponseOk(response);
-
-      const body = (await response.json()) as SessionResponse;
-      setSessions((current) =>
-        current.map((session) =>
-          session.id === body.session.id ? body.session : session,
-        ),
-      );
-    },
-    [ensureResponseOk],
-  );
-
-  const refreshSelected = useCallback(async () => {
+  async function refreshSelected() {
     if (!selectedId) {
       return;
     }
@@ -195,7 +127,10 @@ export default function Home() {
     setError(null);
 
     try {
-      await loadSessionDetail(selectedId);
+      await Promise.all([
+        refreshSessions(selectedId),
+        sessionDetailQuery.refetch(),
+      ]);
     } catch (refreshError) {
       setError(
         refreshError instanceof Error
@@ -205,7 +140,7 @@ export default function Home() {
     } finally {
       setBusy(null);
     }
-  }, [loadSessionDetail, selectedId]);
+  }
 
   async function submitCreateSession(payload: CreateSessionPayload) {
     setBusy("create");
@@ -213,18 +148,14 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+      const body = await createSessionMutation.mutateAsync({
+        input: payload,
       });
-      await ensureResponseOk(response);
-
-      const body = (await response.json()) as SessionResponse;
       setCreateForm({ name: "", repoUrl: "", repoRef: "" });
       setExecResult(null);
-      setMessage(`Session created: ${body.session.name}`);
-      await loadSessions(body.session.id);
+      setSelectedId(body.id);
+      setMessage(`Session created: ${body.name}`);
+      await refreshSessions(body.id);
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -262,20 +193,16 @@ export default function Home() {
       return;
     }
 
-    setClaudeApiKeySaving(true);
     setClaudeApiKeyError(null);
     setError(null);
     setMessage(null);
 
     try {
-      const response = await fetch("/api/claude-token", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ apiKey }),
+      await saveClaudeApiKeyMutation.mutateAsync({
+        input: {
+          apiKey,
+        },
       });
-      await ensureResponseOk(response);
-
-      setClaudeApiKeyConfigured(true);
       setClaudeApiKeyInput("");
       setIsClaudeApiKeyModalOpen(false);
       setMessage("Claude API key saved.");
@@ -289,8 +216,6 @@ export default function Home() {
       setClaudeApiKeyError(
         saveError instanceof Error ? saveError.message : String(saveError),
       );
-    } finally {
-      setClaudeApiKeySaving(false);
     }
   }
 
@@ -303,18 +228,14 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${selectedId}/terminate`, {
-        method: "POST",
+      const body = await terminateSessionMutation.mutateAsync({
+        input: {
+          sessionId: selectedId,
+        },
       });
-      await ensureResponseOk(response);
-
-      const body = (await response.json()) as SessionResponse;
-      setSessions((current) =>
-        current.map((session) =>
-          session.id === body.session.id ? body.session : session,
-        ),
-      );
-      setMessage(`Session terminated: ${body.session.name}`);
+      setMessage(`Session terminated: ${body.name}`);
+      await refreshSessions(selectedId);
+      await sessionDetailQuery.refetch();
     } catch (terminateError) {
       setError(
         terminateError instanceof Error
@@ -325,7 +246,6 @@ export default function Home() {
       setBusy(null);
     }
   }
-
 
   async function runCommand(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -338,20 +258,16 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/sessions/${selectedId}/exec`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const body = await executeSessionMutation.mutateAsync({
+        input: {
+          sessionId: selectedId,
           cmd: command,
           cwd: cwd.trim() || undefined,
           pty: true,
-        }),
+        },
       });
-      await ensureResponseOk(response);
-
-      const body = (await response.json()) as ExecResponse;
-      setExecResult(body.result);
-      setMessage(`Command finished with exit code ${body.result.exitCode}`);
+      setExecResult(body);
+      setMessage(`Command finished with exit code ${body.exitCode}`);
       await refreshSelected();
     } catch (execError) {
       setError(
@@ -374,9 +290,13 @@ export default function Home() {
       if (!response.ok) {
         throw new Error(await parseError(response));
       }
-      setUser(null);
-      setClaudeApiKeyConfigured(false);
-      setSessions([]);
+      queryClient.setQueryData(getViewerQueryKey(), null);
+      queryClient.setQueryData(getSessionsQueryKey(), []);
+      if (selectedId) {
+        queryClient.removeQueries({
+          queryKey: getSessionDetailQueryKey(selectedId),
+        });
+      }
       setSelectedId(null);
       setExecResult(null);
       setPendingCreatePayload(null);
@@ -410,30 +330,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void loadMe();
-  }, [loadMe]);
-
-  useEffect(() => {
     if (!user) {
-      setClaudeApiKeyConfigured(false);
-      setSessions([]);
       setSelectedId(null);
-      return;
-    }
-    void loadSessions();
-  }, [loadSessions, user]);
-
-  useEffect(() => {
-    if (!user || !selectedId) {
+      setExecResult(null);
       return;
     }
 
-    void loadSessionDetail(selectedId).catch((loadError) => {
-      setError(
-        loadError instanceof Error ? loadError.message : String(loadError),
-      );
+    setSelectedId((currentSelectedId) => {
+      if (
+        currentSelectedId &&
+        sessions.some((session) => session.id === currentSelectedId)
+      ) {
+        return currentSelectedId;
+      }
+
+      return sessions[0]?.id ?? null;
     });
-  }, [loadSessionDetail, selectedId, user]);
+  }, [sessions, user]);
 
   if (authLoading) {
     return (
@@ -463,9 +376,9 @@ export default function Home() {
             </p>
           </header>
 
-          {(authNotice || error) && (
+          {(authNotice || error || queryErrorMessage) && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {authNotice ?? error}
+              {authNotice ?? error ?? queryErrorMessage}
             </div>
           )}
 
@@ -533,9 +446,9 @@ export default function Home() {
             {message}
           </p>
         ) : null}
-        {error ? (
+        {(error ?? queryErrorMessage) ? (
           <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
+            {error ?? queryErrorMessage}
           </p>
         ) : null}
 
@@ -594,7 +507,9 @@ export default function Home() {
               <h2 className="text-lg font-semibold">Sessions</h2>
               <button
                 type="button"
-                onClick={() => loadSessions()}
+                onClick={() => {
+                  void refreshSessions();
+                }}
                 disabled={loading || busy !== null}
                 className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >

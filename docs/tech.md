@@ -2,7 +2,10 @@
 
 ## Architecture
 - Implement frontend/backend in `apps/manager-app` using Next.js App Router.
-- Use Modal Sandbox as the session runtime, and standardize public APIs under `/api/sessions/*`.
+- Use Modal Sandbox as the session runtime.
+- Expose authenticated manager operations through a GraphQL API at `/api/graphql`, implemented with `gqlkit` and GraphQL Yoga.
+- Consume manager GraphQL APIs from the web UI with TanStack Query and a generated typed client from GraphQL Code Generator `client-preset` (pinned to a 6.x prerelease while evaluating the upcoming major version).
+- Keep redirect/webhook-oriented endpoints (`/api/auth/*`, `/api/webhooks/*`, `/api/slack/link`) as REST handlers.
 - Manage session state in a local SQLite DB (`SESSION_DB_PATH`) through Drizzle ORM.
 
 ## Runtime Strategy
@@ -11,7 +14,7 @@
 - The broker provides SSE-streamed Claude execution with a state machine (`idle → running → waiting_for_approval`) and handles `canUseTool` user-feedback interception.
 - The workflow (`sessionChatTurnWorkflow`) manages one Claude turn per prompt: broker SSE reading → DB message persistence → approval hook loop → lock release.
 - Adopt an API-driven execution model instead of a persistent terminal relay such as `ttyd`.
-- Implement Session chat interactions via API endpoints (`/api/sessions/{id}/chat`) and render them in a dedicated Web chat page. POST /chat is **asynchronous** (returns `{status: "submitted"}`), with the client relying on polling for message updates.
+- Implement Session chat interactions through GraphQL mutations and queries; prompt submission remains **asynchronous** and the client continues polling chat state for updates.
 - Use Drizzle ORM v1 beta for typed schema and queries.
 - Keep runtime path focused on DB access only; run schema migration explicitly with `drizzle-kit migrate`.
 - Expose Session SSH port via Modal tunnel and run `sshd` inside each Session for direct CLI login.
@@ -22,18 +25,21 @@
 - Session creation from Slack reuses the existing `createSession()` and `sendSessionClaudeChatMessage()` service functions — Slack is an alternative input channel, not a parallel implementation.
 - Slack user ↔ app user binding uses a one-time link token flow: the bot sends an ephemeral message with a URL; the user authenticates via existing GitHub OAuth and the mapping is stored in `slack_user_mappings`.
 - Persist Claude Code chat transcripts server-side in SQLite as raw Claude Agent SDK `SDKMessage` JSON records, with UI-oriented shaping performed at read time.
-- Return Session chat messages from the API in a generalized `role + parts[] + metadata` schema (inspired by Vercel AI SDK `UIMessage`) instead of exposing Claude Agent SDK transport message shapes directly.
-- Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts (stateful `input-*` / `output-*`) and synthesize them from raw Claude SDK transcript events by `toolUseId` so the Web UI renders a single coherent tool card per invocation.
+- Export agent messages in the GraphQL schema as AI SDK `UIMessage<Metadata, DataParts, {}>` object types instead of maintaining a separate custom message envelope.
+- Model tool invocations/results in the chat API as AI SDK-style `dynamic-tool` parts and keep non-tool transcript payloads in a reduced `data-event` / `data-result` taxonomy; event payloads keep `kind` in the shared UI/runtime contract and top-level parts keep `type`, while the GraphQL schema resolves both unions from those hidden discriminators via shared `GqlObject` types with `ignoreFields`.
 - Build the Session chat Web UI with Vercel AI Elements primitives (for example `Conversation`, `Message`, `PromptInput`) and adapt them to the app's generalized chat message schema.
 - Support multi-turn Session chat continuity by resuming Claude Code conversations using Claude Agent SDK `query()` with stored SDK session IDs.
 - Use Workflow DevKit (useworkflow.dev) Local World for durable orchestration; wrap `next.config.ts` with `withWorkflow()`.
 - Derive approval hook tokens deterministically from session ID + tool use ID (`session:{sessionId}:approval:{toolUseId}`), eliminating the need for DB-persisted workflow state.
 - Resolve broker tunnel URL on-demand via Modal API (`sandbox.tunnels()`) instead of persisting it.
+- Add custom GraphQL scalars for ISO `DateTime` values and arbitrary `JSON` payloads used by chat message parts and broker state, defined as shared `GqlScalar` types and re-exported from the gqlkit schema surface.
+- Generate client-side GraphQL documents/types from the checked-in schema file (`apps/manager-app/graphql/schema.graphql`) and use a small fetch wrapper rather than a heavier normalized-cache GraphQL client.
+- Treat generated GraphQL client artifacts as format-managed code (`biome format`) but exclude them from `pnpm lint` via a single `biome.jsonc` override that disables `linter` and `assist` for `src/lib/graphql/__generated__`.
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
 - Persist app users in `users`; persist GitHub profile in `github_accounts`; persist encrypted OAuth tokens in `github_credentials`; persist encrypted Claude API key in `claude_credentials`.
-- Protect all `/api/sessions/*` endpoints with authentication and enforce owner-only access by `sessions.owner_user_id`.
+- Protect authenticated manager GraphQL operations with session-cookie auth and enforce owner-only access by `sessions.owner_user_id`; allow `viewer` to return `null` when unauthenticated.
 - Use authenticated user's GitHub OAuth token when cloning repositories (public/private), injected via `GIT_ASKPASS` to avoid token leakage in command arguments.
 - Request `read:user user:email repo read:org gist` GitHub OAuth scopes to support Session bootstrap with `gh auth`.
 - Initialize GitHub authentication in each Session using `gh auth login --with-token` and `gh auth setup-git` for `github.com` over HTTPS, then rely on git credential helper integration for clone/fetch/pull/push.
@@ -45,10 +51,11 @@
 - Require per-user Claude API key for Claude Agent SDK execution; do not use environment-variable fallback credentials.
 
 ## API & Naming Rules
-- Standardize public naming on `Session` and use `/sessions` route semantics.
+- Standardize public naming on `Session`.
 - Avoid exposing Modal-specific concepts excessively in UI/API.
-- Acquire `db` in API handlers and pass it into service/store layers via dependency injection.
-- Return SSH connection metadata from Session detail API (`GET /api/sessions/{id}`) and keep list API lightweight.
+- Acquire `db` in the GraphQL context and pass it into service/store layers via dependency injection.
+- Return SSH connection metadata from the `Session.ssh` field and keep list queries lightweight unless the client explicitly selects that field.
+- Map domain/auth/validation failures to GraphQL errors with typed `extensions` instead of REST-style status-code JSON envelopes.
 
 ## Operational Constraints
 - Fail fast with explicit errors when required environment variables are missing.

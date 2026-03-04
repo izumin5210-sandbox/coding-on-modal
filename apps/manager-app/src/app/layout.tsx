@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppQueryClientProvider } from "@/components/providers/query-client-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
@@ -28,7 +29,9 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <TooltipProvider>{children}</TooltipProvider>
+        <AppQueryClientProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </AppQueryClientProvider>
       </body>
     </html>
   );
