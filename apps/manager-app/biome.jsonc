@@ -29,5 +29,16 @@
       "next": "recommended",
       "react": "recommended"
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["src/lib/graphql/__generated__/**"],
+      "linter": {
+        "enabled": false
+      },
+      "assist": {
+        "enabled": false
+      }
+    }
+  ]
 }

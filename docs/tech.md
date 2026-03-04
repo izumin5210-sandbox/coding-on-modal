@@ -34,7 +34,7 @@
 - Resolve broker tunnel URL on-demand via Modal API (`sandbox.tunnels()`) instead of persisting it.
 - Add custom GraphQL scalars for ISO `DateTime` values and arbitrary `JSON` payloads used by chat message parts and broker state, defined as shared `GqlScalar` types and re-exported from the gqlkit schema surface.
 - Generate client-side GraphQL documents/types from the checked-in schema file (`apps/manager-app/graphql/schema.graphql`) and use a small fetch wrapper rather than a heavier normalized-cache GraphQL client.
-- Treat generated GraphQL client artifacts as format-managed code (`biome format`) but exclude them from the `pnpm lint` Biome config so generated output does not require hand-maintained lint suppressions.
+- Treat generated GraphQL client artifacts as format-managed code (`biome format`) but exclude them from `pnpm lint` via a single `biome.jsonc` override that disables `linter` and `assist` for `src/lib/graphql/__generated__`.
 
 ## Authentication Strategy (Current Phase)
 - Implement custom GitHub OAuth login (`state` + PKCE) and issue app session JWT in HttpOnly cookie.
