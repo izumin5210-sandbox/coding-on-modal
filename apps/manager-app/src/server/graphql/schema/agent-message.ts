@@ -1,26 +1,19 @@
 import type { IDString } from "@gqlkit-ts/runtime";
 import type {
+  AgentMessageEventKind,
   AgentDynamicToolPart as SharedAgentDynamicToolPart,
-  AgentErrorEvent as SharedAgentErrorEvent,
-  AgentFileBatchFailure as SharedAgentFileBatchFailure,
-  AgentFileBatchFile as SharedAgentFileBatchFile,
   AgentMessage as SharedAgentMessage,
-  AgentMessageEventData as SharedAgentMessageEventData,
   AgentMessageMetadata as SharedAgentMessageMetadata,
   AgentMessagePart as SharedAgentMessagePart,
   AgentMessageRole as SharedAgentMessageRole,
   AgentReasoningPart as SharedAgentReasoningPart,
   AgentRunMetrics as SharedAgentRunMetrics,
   AgentRunResultData as SharedAgentRunResultData,
-  AgentStatusEvent as SharedAgentStatusEvent,
-  AgentStreamEvent as SharedAgentStreamEvent,
   AgentTextPart as SharedAgentTextPart,
-  AgentToolProgressEvent as SharedAgentToolProgressEvent,
-  AgentToolSummaryEvent as SharedAgentToolSummaryEvent,
-  AgentUnknownEvent as SharedAgentUnknownEvent,
 } from "@/lib/session-chat-types";
 import { defineResolveType } from "../gqlkit";
-import type { DateTime, JsonValue } from "./scalars";
+import type { AgentMessageEventData } from "./agent-message-events";
+import type { JsonValue } from "./scalars";
 
 export type AgentMessageMetadata = SharedAgentMessageMetadata;
 
@@ -57,77 +50,6 @@ export type AgentMessageDynamicToolPart = {
   };
 };
 
-export type AgentMessageToolProgressEvent = {
-  $typeName: "AgentMessageToolProgressEvent";
-  kind: string;
-  toolUseId: SharedAgentToolProgressEvent["toolUseId"];
-  toolName: SharedAgentToolProgressEvent["toolName"];
-  elapsedSeconds: SharedAgentToolProgressEvent["elapsedSeconds"];
-};
-
-export type AgentMessageToolSummaryEvent = {
-  $typeName: "AgentMessageToolSummaryEvent";
-  kind: string;
-  summary: SharedAgentToolSummaryEvent["summary"];
-  precedingToolUseIds: SharedAgentToolSummaryEvent["precedingToolUseIds"];
-};
-
-export type AgentMessageStatusEvent = {
-  $typeName: "AgentMessageStatusEvent";
-  kind: string;
-  subtype: SharedAgentStatusEvent["subtype"];
-  data: JsonValue;
-};
-
-export type AgentMessageFileBatchFile = {
-  filename: SharedAgentFileBatchFile["filename"];
-  fileId: SharedAgentFileBatchFile["fileId"];
-};
-
-export type AgentMessageFileBatchFailure = {
-  filename: SharedAgentFileBatchFailure["filename"];
-  error: SharedAgentFileBatchFailure["error"];
-};
-
-export type AgentMessageFileBatchEvent = {
-  $typeName: "AgentMessageFileBatchEvent";
-  kind: string;
-  files: AgentMessageFileBatchFile[];
-  failed: AgentMessageFileBatchFailure[];
-  processedAt?: DateTime;
-};
-
-export type AgentMessageStreamEvent = {
-  $typeName: "AgentMessageStreamEvent";
-  kind: string;
-  eventType?: SharedAgentStreamEvent["eventType"];
-  data: JsonValue;
-};
-
-export type AgentMessageErrorEvent = {
-  $typeName: "AgentMessageErrorEvent";
-  kind: string;
-  message: SharedAgentErrorEvent["message"];
-  code?: SharedAgentErrorEvent["code"];
-};
-
-export type AgentMessageUnknownEvent = {
-  $typeName: "AgentMessageUnknownEvent";
-  kind: string;
-  rawType: SharedAgentUnknownEvent["rawType"];
-  rawSubtype?: SharedAgentUnknownEvent["rawSubtype"];
-  data: JsonValue;
-};
-
-export type AgentMessageEventData =
-  | AgentMessageToolProgressEvent
-  | AgentMessageToolSummaryEvent
-  | AgentMessageStatusEvent
-  | AgentMessageFileBatchEvent
-  | AgentMessageStreamEvent
-  | AgentMessageErrorEvent
-  | AgentMessageUnknownEvent;
-
 export type AgentMessageEventPart = {
   $typeName: "AgentMessageEventPart";
   type: string;
@@ -161,8 +83,29 @@ export type AgentMessage = Omit<
   parts: AgentMessagePart[];
 };
 
+type AgentMessageEventTypeName =
+  | "AgentMessageToolProgressEvent"
+  | "AgentMessageToolSummaryEvent"
+  | "AgentMessageStatusEvent"
+  | "AgentMessageFileBatchEvent"
+  | "AgentMessageStreamEvent"
+  | "AgentMessageErrorEvent"
+  | "AgentMessageUnknownEvent";
+
+const AGENT_MESSAGE_EVENT_TYPENAME_BY_KIND = {
+  "tool-progress": "AgentMessageToolProgressEvent",
+  "tool-summary": "AgentMessageToolSummaryEvent",
+  status: "AgentMessageStatusEvent",
+  "file-batch": "AgentMessageFileBatchEvent",
+  stream: "AgentMessageStreamEvent",
+  error: "AgentMessageErrorEvent",
+  unknown: "AgentMessageUnknownEvent",
+} as const satisfies Record<AgentMessageEventKind, AgentMessageEventTypeName>;
+
 export const agentMessageEventDataResolveType =
-  defineResolveType<AgentMessageEventData>((value) => value.$typeName);
+  defineResolveType<AgentMessageEventData>(
+    (value) => AGENT_MESSAGE_EVENT_TYPENAME_BY_KIND[value.kind],
+  );
 
 export const agentMessagePartResolveType = defineResolveType<AgentMessagePart>(
   (value) => value.$typeName,
@@ -195,65 +138,6 @@ function toMetadata(
     providerUuid: metadata.providerUuid,
     rawStoredMessageId: metadata.rawStoredMessageId,
   };
-}
-
-function toEventData(data: SharedAgentMessageEventData): AgentMessageEventData {
-  switch (data.kind) {
-    case "tool-progress":
-      return {
-        $typeName: "AgentMessageToolProgressEvent",
-        kind: data.kind,
-        toolUseId: data.toolUseId,
-        toolName: data.toolName,
-        elapsedSeconds: data.elapsedSeconds,
-      };
-    case "tool-summary":
-      return {
-        $typeName: "AgentMessageToolSummaryEvent",
-        kind: data.kind,
-        summary: data.summary,
-        precedingToolUseIds: data.precedingToolUseIds,
-      };
-    case "status":
-      return {
-        $typeName: "AgentMessageStatusEvent",
-        kind: data.kind,
-        subtype: data.subtype,
-        data: toJsonValue(data.data),
-      };
-    case "file-batch":
-      return {
-        $typeName: "AgentMessageFileBatchEvent",
-        kind: data.kind,
-        files: data.files,
-        failed: data.failed,
-        processedAt: data.processedAt,
-      };
-    case "stream":
-      return {
-        $typeName: "AgentMessageStreamEvent",
-        kind: data.kind,
-        eventType: data.eventType,
-        data: toJsonValue(data.data),
-      };
-    case "error":
-      return {
-        $typeName: "AgentMessageErrorEvent",
-        kind: data.kind,
-        message: data.message,
-        code: data.code,
-      };
-    case "unknown":
-      return {
-        $typeName: "AgentMessageUnknownEvent",
-        kind: data.kind,
-        rawType: data.rawType,
-        rawSubtype: data.rawSubtype,
-        data: toJsonValue(data.data),
-      };
-  }
-
-  throw new Error(`Unsupported agent message event kind: ${String(data)}`);
 }
 
 function toPart(part: SharedAgentMessagePart): AgentMessagePart {
@@ -291,7 +175,7 @@ function toPart(part: SharedAgentMessagePart): AgentMessagePart {
       return {
         $typeName: "AgentMessageEventPart",
         type: part.type,
-        data: toEventData(part.data),
+        data: part.data,
       };
     case "data-result":
       return {

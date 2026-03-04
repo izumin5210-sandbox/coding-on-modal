@@ -295,52 +295,46 @@ export type SessionChatPageQueryQuery = {
           | {
               __typename: "AgentMessageEventPart";
               type: string;
-              data:
+              eventData:
                 | {
                     __typename: "AgentMessageErrorEvent";
-                    kind: string;
                     message: string;
                     code: string | null;
                   }
                 | {
                     __typename: "AgentMessageFileBatchEvent";
-                    kind: string;
                     processedAt: string | null;
                     files: Array<{ filename: string; fileId: string }>;
                     failed: Array<{ filename: string; error: string }>;
                   }
                 | {
                     __typename: "AgentMessageStatusEvent";
-                    kind: string;
                     subtype: string;
                     data: unknown;
                   }
                 | {
                     __typename: "AgentMessageStreamEvent";
-                    kind: string;
                     eventType: string | null;
                     data: unknown;
                   }
                 | {
                     __typename: "AgentMessageToolProgressEvent";
-                    kind: string;
                     toolUseId: string;
                     toolName: string;
                     elapsedSeconds: number;
                   }
                 | {
                     __typename: "AgentMessageToolSummaryEvent";
-                    kind: string;
                     summary: string;
                     precedingToolUseIds: Array<string>;
                   }
                 | {
                     __typename: "AgentMessageUnknownEvent";
-                    kind: string;
                     rawType: string;
                     rawSubtype: string | null;
                     data: unknown;
-                  };
+                  }
+                | null;
             }
           | {
               __typename: "AgentMessageReasoningPart";
@@ -351,7 +345,7 @@ export type SessionChatPageQueryQuery = {
           | {
               __typename: "AgentMessageResultPart";
               type: string;
-              data: {
+              resultData: {
                 subtype: string;
                 isError: boolean;
                 summaryText: string;
@@ -1440,6 +1434,10 @@ export const SessionChatPageQueryDocument = {
                                         },
                                         {
                                           kind: "Field",
+                                          alias: {
+                                            kind: "Name",
+                                            value: "eventData",
+                                          },
                                           name: { kind: "Name", value: "data" },
                                           selectionSet: {
                                             kind: "SelectionSet",
@@ -1464,13 +1462,6 @@ export const SessionChatPageQueryDocument = {
                                                 selectionSet: {
                                                   kind: "SelectionSet",
                                                   selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
                                                     {
                                                       kind: "Field",
                                                       name: {
@@ -1512,13 +1503,6 @@ export const SessionChatPageQueryDocument = {
                                                       kind: "Field",
                                                       name: {
                                                         kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
                                                         value: "summary",
                                                       },
                                                     },
@@ -1550,13 +1534,6 @@ export const SessionChatPageQueryDocument = {
                                                       kind: "Field",
                                                       name: {
                                                         kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
                                                         value: "subtype",
                                                       },
                                                     },
@@ -1583,13 +1560,6 @@ export const SessionChatPageQueryDocument = {
                                                 selectionSet: {
                                                   kind: "SelectionSet",
                                                   selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
                                                     {
                                                       kind: "Field",
                                                       name: {
@@ -1669,13 +1639,6 @@ export const SessionChatPageQueryDocument = {
                                                       kind: "Field",
                                                       name: {
                                                         kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
                                                         value: "eventType",
                                                       },
                                                     },
@@ -1706,13 +1669,6 @@ export const SessionChatPageQueryDocument = {
                                                       kind: "Field",
                                                       name: {
                                                         kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
                                                         value: "message",
                                                       },
                                                     },
@@ -1739,13 +1695,6 @@ export const SessionChatPageQueryDocument = {
                                                 selectionSet: {
                                                   kind: "SelectionSet",
                                                   selections: [
-                                                    {
-                                                      kind: "Field",
-                                                      name: {
-                                                        kind: "Name",
-                                                        value: "kind",
-                                                      },
-                                                    },
                                                     {
                                                       kind: "Field",
                                                       name: {
@@ -1794,6 +1743,10 @@ export const SessionChatPageQueryDocument = {
                                         },
                                         {
                                           kind: "Field",
+                                          alias: {
+                                            kind: "Name",
+                                            value: "resultData",
+                                          },
                                           name: { kind: "Name", value: "data" },
                                           selectionSet: {
                                             kind: "SelectionSet",

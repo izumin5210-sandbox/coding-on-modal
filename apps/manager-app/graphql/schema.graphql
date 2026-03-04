@@ -44,16 +44,15 @@ type AgentMessageDynamicToolPartApproval {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageErrorEvent {
   code: String
-  kind: String!
   message: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 union AgentMessageEventData =
   | AgentMessageErrorEvent
@@ -68,22 +67,21 @@ union AgentMessageEventData =
 Defined in: src/server/graphql/schema/agent-message.ts
 """
 type AgentMessageEventPart {
-  data: AgentMessageEventData!
+  data: AgentMessageEventData
   type: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageFileBatchEvent {
   failed: [AgentMessageFileBatchFailure!]!
   files: [AgentMessageFileBatchFile!]!
-  kind: String!
   processedAt: DateTime
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageFileBatchFailure {
   error: String!
@@ -91,7 +89,7 @@ type AgentMessageFileBatchFailure {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageFileBatchFile {
   fileId: String!
@@ -229,21 +227,19 @@ enum AgentMessageRole {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageStatusEvent {
   data: JSON!
-  kind: String!
   subtype: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageStreamEvent {
   data: JSON!
   eventType: String
-  kind: String!
 }
 
 """
@@ -256,30 +252,27 @@ type AgentMessageTextPart {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageToolProgressEvent {
   elapsedSeconds: Float!
-  kind: String!
   toolName: String!
   toolUseId: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageToolSummaryEvent {
-  kind: String!
   precedingToolUseIds: [String!]!
   summary: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-events.ts
 """
 type AgentMessageUnknownEvent {
   data: JSON!
-  kind: String!
   rawSubtype: String
   rawType: String!
 }

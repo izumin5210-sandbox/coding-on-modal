@@ -115,44 +115,65 @@ export type AgentMessageMetadata = {
 
 export type AgentMessageData = {
   event:
-    | {
-        kind: "tool-progress";
-        toolUseId: string;
-        toolName: string;
-        elapsedSeconds: number;
-      }
-    | {
-        kind: "tool-summary";
-        summary: string;
-        precedingToolUseIds: string[];
-      }
-    | {
-        kind: "status";
-        subtype: string;
-        data: JSON;
-      }
-    | {
-        kind: "file-batch";
-        files: { filename: string; fileId: string }[];
-        failed: { filename: string; error: string }[];
-        processedAt?: DateTime;
-      }
-    | {
-        kind: "stream";
-        eventType?: string;
-        data: JSON;
-      }
-    | {
-        kind: "error";
-        message: string;
-        code?: string;
-      }
-    | {
-        kind: "unknown";
-        rawType: string;
-        rawSubtype?: string;
-        data: JSON;
-      };
+    | GqlObject<
+        {
+          kind: "tool-progress";
+          toolUseId: string;
+          toolName: string;
+          elapsedSeconds: number;
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "tool-summary";
+          summary: string;
+          precedingToolUseIds: string[];
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "status";
+          subtype: string;
+          data: JSON;
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "file-batch";
+          files: { filename: string; fileId: string }[];
+          failed: { filename: string; error: string }[];
+          processedAt?: DateTime;
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "stream";
+          eventType?: string;
+          data: JSON;
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "error";
+          message: string;
+          code?: string;
+        },
+        { ignoreFields: "kind" }
+      >
+    | GqlObject<
+        {
+          kind: "unknown";
+          rawType: string;
+          rawSubtype?: string;
+          data: JSON;
+        },
+        { ignoreFields: "kind" }
+      >;
   result: {
     subtype: string;
     isError: boolean;
@@ -173,6 +194,7 @@ export type AgentMessage = UIMessage<AgentMessageMetadata, AgentMessageData, {}>
 - `UIMessage` already matches the rendering model used by AI SDK UI components.
 - `dynamic-tool` can replace the current custom `tool-call` and `tool-result` message parts for the main tool lifecycle.
 - Existing trace/status/result payloads still fit naturally into typed `data-*` parts, but the public taxonomy should stay compact by collapsing them into `data-event` and `data-result`.
+- Event payloads can use shared `GqlObject<..., { ignoreFields: "kind" }>` types so gqlkit can resolve the GraphQL union by `kind` without exposing that discriminator or requiring schema-side field redefinition.
 - `UIMessage` does not include timestamps, so `createdAt` and `updatedAt` should move into `metadata`. This is an intentional adaptation to keep the top-level object exactly `UIMessage`.
 
 ## Pending User Input Model
@@ -242,7 +264,8 @@ apps/manager-app/graphql/schema.graphql
 Notes:
 - `route.ts` hosts Yoga and creates the gqlkit schema.
 - `src/lib/session-chat-types.ts` owns the exported `UIMessage` alias and the compact `data-event` / `data-result` payloads.
-- `schema/agent-message.ts` maps the shared chat message contract into GraphQL object and union types.
+- `src/lib/agent-message-event-types.ts` owns the canonical event union, including hidden `kind` discriminators for GraphQL resolution.
+- `schema/agent-message.ts` maps the shared chat message contract into GraphQL object and union types, while `schema/agent-message-events.ts` re-exports the shared event member types for gqlkit.
 - Existing REST route handlers should be removed only after the UI is switched over.
 
 ## Migration Plan
@@ -254,6 +277,7 @@ Notes:
   - `reasoning` when available
   - `dynamic-tool`
   - typed `data-event` and `data-result` parts for trace/result/status payloads
+- Keep event `kind` in the shared runtime contract, but hide it from the GraphQL schema and reconstruct it from `__typename` in the web client.
 - Update the chat UI to read `UIMessage` parts instead of the current custom part union.
 
 ### Phase 2: Introduce GraphQL infrastructure

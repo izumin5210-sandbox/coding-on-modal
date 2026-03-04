@@ -219,26 +219,22 @@ export const sessionChatPageDocument = graphql(`
             }
             ... on AgentMessageEventPart {
               type
-              data {
+              eventData: data {
                 __typename
                 ... on AgentMessageToolProgressEvent {
-                  kind
                   toolUseId
                   toolName
                   elapsedSeconds
                 }
                 ... on AgentMessageToolSummaryEvent {
-                  kind
                   summary
                   precedingToolUseIds
                 }
                 ... on AgentMessageStatusEvent {
-                  kind
                   subtype
                   data
                 }
                 ... on AgentMessageFileBatchEvent {
-                  kind
                   processedAt
                   files {
                     filename
@@ -250,17 +246,14 @@ export const sessionChatPageDocument = graphql(`
                   }
                 }
                 ... on AgentMessageStreamEvent {
-                  kind
                   eventType
                   data
                 }
                 ... on AgentMessageErrorEvent {
-                  kind
                   message
                   code
                 }
                 ... on AgentMessageUnknownEvent {
-                  kind
                   rawType
                   rawSubtype
                   data
@@ -269,7 +262,7 @@ export const sessionChatPageDocument = graphql(`
             }
             ... on AgentMessageResultPart {
               type
-              data {
+              resultData: data {
                 subtype
                 isError
                 summaryText

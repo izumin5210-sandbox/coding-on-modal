@@ -373,23 +373,6 @@ export const typeDefs: DocumentNode = {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
             value: "message",
           },
           type: {
@@ -406,7 +389,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -469,7 +452,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -487,13 +470,10 @@ export const typeDefs: DocumentNode = {
             value: "data",
           },
           type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "AgentMessageEventData",
-              },
+            kind: "NamedType",
+            name: {
+              kind: "Name",
+              value: "AgentMessageEventData",
             },
           },
         },
@@ -578,23 +558,6 @@ export const typeDefs: DocumentNode = {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
             value: "processedAt",
           },
           type: {
@@ -608,7 +571,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -656,7 +619,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -704,7 +667,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -1593,23 +1556,6 @@ export const typeDefs: DocumentNode = {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
             value: "subtype",
           },
           type: {
@@ -1626,7 +1572,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -1668,27 +1614,10 @@ export const typeDefs: DocumentNode = {
             },
           },
         },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -1782,23 +1711,6 @@ export const typeDefs: DocumentNode = {
           kind: "FieldDefinition",
           name: {
             kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
             value: "toolName",
           },
           type: {
@@ -1832,7 +1744,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -1843,23 +1755,6 @@ export const typeDefs: DocumentNode = {
         value: "AgentMessageToolSummaryEvent",
       },
       fields: [
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
-              },
-            },
-          },
-        },
         {
           kind: "FieldDefinition",
           name: {
@@ -1903,7 +1798,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },
@@ -1927,23 +1822,6 @@ export const typeDefs: DocumentNode = {
               name: {
                 kind: "Name",
                 value: "JSON",
-              },
-            },
-          },
-        },
-        {
-          kind: "FieldDefinition",
-          name: {
-            kind: "Name",
-            value: "kind",
-          },
-          type: {
-            kind: "NonNullType",
-            type: {
-              kind: "NamedType",
-              name: {
-                kind: "Name",
-                value: "String",
               },
             },
           },
@@ -1982,7 +1860,7 @@ export const typeDefs: DocumentNode = {
       ],
       description: {
         kind: "StringValue",
-        value: "Defined in: src/server/graphql/schema/agent-message.ts",
+        value: "Defined in: src/server/graphql/schema/agent-message-events.ts",
         block: true,
       },
     },

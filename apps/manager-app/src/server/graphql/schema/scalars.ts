@@ -1,4 +1,1 @@
-import type { GqlScalar } from "@gqlkit-ts/runtime";
-
-export type DateTime = GqlScalar<"DateTime", string>;
-export type JsonValue = GqlScalar<"JSON", unknown>;
+export type { DateTime, JsonValue } from "@/lib/graphql-scalar-types";

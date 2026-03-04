@@ -1,5 +1,6 @@
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { resumeHook, start } from "workflow/api";
+import type { JsonValue } from "@/lib/graphql-scalar-types";
 import type {
   AgentEventPart,
   AgentMessage,
@@ -115,6 +116,10 @@ function mergeMetadata(
   });
 }
 
+function toJsonValue(value: unknown): JsonValue {
+  return value as JsonValue;
+}
+
 function createEventPart(data: AgentMessageEventData): AgentEventPart {
   return {
     type: "data-event",
@@ -152,7 +157,7 @@ function createMessage(
                 (envelope.message as unknown as Record<string, unknown>)
                   .subtype,
               ),
-              data: envelope.message,
+              data: toJsonValue(envelope.message),
             }),
           ],
     createdAt: envelope.createdAt,
@@ -241,7 +246,7 @@ function normalizeContentBlocks(blocks: unknown): NormalizedMessagePart[] {
         createEventPart({
           kind: "unknown",
           rawType: "non_object_block",
-          data: block,
+          data: toJsonValue(block),
         }),
       );
       continue;
@@ -291,7 +296,7 @@ function normalizeContentBlocks(blocks: unknown): NormalizedMessagePart[] {
       createEventPart({
         kind: "unknown",
         rawType: blockType,
-        data: block,
+        data: toJsonValue(block),
       }),
     );
   }
@@ -312,7 +317,7 @@ function normalizeMessageParamToParts(
       createEventPart({
         kind: "unknown",
         rawType: "user_message_param",
-        data: messageParam,
+        data: toJsonValue(messageParam),
       }),
     ];
   }
@@ -330,7 +335,7 @@ function normalizeMessageParamToParts(
     createEventPart({
       kind: "unknown",
       rawType: "user_message_param",
-      data: messageParam,
+      data: toJsonValue(messageParam),
     }),
   ];
 }
@@ -417,7 +422,9 @@ function statusPartFromRecord(
   return createEventPart({
     kind: "status",
     subtype,
-    data: omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
+    data: toJsonValue(
+      omitKeys(record, ["type", "subtype", "uuid", "session_id"]),
+    ),
   });
 }
 
@@ -555,11 +562,11 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
         createEventPart({
           kind: "status",
           subtype: "auth_status",
-          data: {
+          data: toJsonValue({
             isAuthenticating: message.isAuthenticating,
             output: message.output,
             error: message.error,
-          },
+          }),
         }),
       ],
       mergeMetadata(baseMetadata, {
@@ -580,7 +587,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
         createEventPart({
           kind: "stream",
           eventType,
-          data: message.event,
+          data: toJsonValue(message.event),
         }),
       ],
       mergeMetadata(baseMetadata, {
@@ -640,7 +647,7 @@ function normalizeSdkEnvelope(envelope: SdkEnvelope): IntermediateMessage {
         kind: "unknown",
         rawType: (message as unknown as { type?: string }).type ?? "unknown",
         rawSubtype: (message as unknown as { subtype?: string }).subtype,
-        data: message,
+        data: toJsonValue(message),
       }),
     ],
     mergeMetadata(baseMetadata, {

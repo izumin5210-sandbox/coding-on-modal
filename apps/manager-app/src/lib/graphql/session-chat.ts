@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { JsonValue } from "@/lib/graphql-scalar-types";
 import type {
   SendSessionChatMessageMutationMutation,
   SendSessionChatMessageMutationMutationVariables,
@@ -29,10 +30,12 @@ type SessionChatPageMessage =
   SessionChatPageSession["chat"]["messages"][number];
 type SessionChatPageMetadata = NonNullable<SessionChatPageMessage["metadata"]>;
 type SessionChatPagePart = SessionChatPageMessage["parts"][number];
-type SessionChatPageEventData = Extract<
-  SessionChatPagePart,
-  { __typename: "AgentMessageEventPart" }
->["data"];
+type SessionChatPageEventData = NonNullable<
+  Extract<
+    SessionChatPagePart,
+    { __typename: "AgentMessageEventPart" }
+  >["eventData"]
+>;
 type SessionChatPagePendingUserInput =
   SessionChatPageSession["chat"]["pendingUserInput"];
 
@@ -133,6 +136,10 @@ function toTextState(
   }
 }
 
+function toJsonValue(value: unknown): JsonValue {
+  return value as JsonValue;
+}
+
 function toMetadata(
   metadata: SessionChatPageMessage["metadata"],
 ): AgentMessageMetadata | undefined {
@@ -177,26 +184,35 @@ function toPart(part: SessionChatPagePart): AgentMessagePart {
     case "AgentMessageEventPart":
       return {
         type: "data-event",
-        data: toEventData(part.data),
+        data: toEventData(part.eventData),
       };
     case "AgentMessageResultPart":
       return {
         type: "data-result",
         data: {
-          subtype: part.data.subtype,
-          isError: part.data.isError,
-          summaryText: part.data.summaryText,
-          metrics: part.data.metrics
+          subtype: part.resultData.subtype,
+          isError: part.resultData.isError,
+          summaryText: part.resultData.summaryText,
+          metrics: part.resultData.metrics
             ? {
-                durationMs: part.data.metrics.durationMs ?? undefined,
-                durationApiMs: part.data.metrics.durationApiMs ?? undefined,
-                numTurns: part.data.metrics.numTurns ?? undefined,
-                totalCostUsd: part.data.metrics.totalCostUsd ?? undefined,
+                durationMs: part.resultData.metrics.durationMs ?? undefined,
+                durationApiMs:
+                  part.resultData.metrics.durationApiMs ?? undefined,
+                numTurns: part.resultData.metrics.numTurns ?? undefined,
+                totalCostUsd: part.resultData.metrics.totalCostUsd ?? undefined,
               }
             : undefined,
         },
       };
   }
+}
+
+function toFallbackUnknownEvent(): AgentMessageEventData {
+  return {
+    kind: "unknown",
+    rawType: "missing_event_data",
+    data: {},
+  };
 }
 
 function toDynamicToolPart(
@@ -297,7 +313,13 @@ function toDynamicToolPart(
   }
 }
 
-function toEventData(data: SessionChatPageEventData): AgentMessageEventData {
+function toEventData(
+  data: SessionChatPageEventData | null | undefined,
+): AgentMessageEventData {
+  if (!data) {
+    return toFallbackUnknownEvent();
+  }
+
   switch (data.__typename) {
     case "AgentMessageToolProgressEvent":
       return {
@@ -335,7 +357,7 @@ function toEventData(data: SessionChatPageEventData): AgentMessageEventData {
       return {
         kind: "stream",
         eventType: data.eventType ?? undefined,
-        data: data.data,
+        data: toJsonValue(data.data),
       };
     case "AgentMessageErrorEvent":
       return {
@@ -348,7 +370,7 @@ function toEventData(data: SessionChatPageEventData): AgentMessageEventData {
         kind: "unknown",
         rawType: data.rawType,
         rawSubtype: data.rawSubtype ?? undefined,
-        data: data.data,
+        data: toJsonValue(data.data),
       };
   }
 }

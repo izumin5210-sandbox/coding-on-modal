@@ -1,5 +1,18 @@
 import type { UIMessage } from "ai";
 import type { SessionRecord } from "@/lib/session-types";
+import type {
+  AgentMessageErrorEvent,
+  AgentMessageEventData,
+  AgentMessageEventKind,
+  AgentMessageFileBatchEvent,
+  AgentMessageFileBatchFailure,
+  AgentMessageFileBatchFile,
+  AgentMessageStatusEvent,
+  AgentMessageStreamEvent,
+  AgentMessageToolProgressEvent,
+  AgentMessageToolSummaryEvent,
+  AgentMessageUnknownEvent,
+} from "./agent-message-event-types";
 
 export type AgentMessageVisibility = "default" | "trace";
 
@@ -16,48 +29,6 @@ export type AgentRunResultData = {
   summaryText: string;
   metrics?: AgentRunMetrics;
 };
-
-export type AgentMessageEventData =
-  | {
-      kind: "tool-progress";
-      toolUseId: string;
-      toolName: string;
-      elapsedSeconds: number;
-    }
-  | {
-      kind: "tool-summary";
-      summary: string;
-      precedingToolUseIds: string[];
-    }
-  | {
-      kind: "status";
-      subtype: string;
-      data: Record<string, unknown>;
-    }
-  | {
-      kind: "file-batch";
-      files: { filename: string; fileId: string }[];
-      failed: { filename: string; error: string }[];
-      processedAt?: string;
-    }
-  | {
-      kind: "stream";
-      eventType?: string;
-      data: unknown;
-    }
-  | {
-      kind: "error";
-      message: string;
-      code?: string;
-    }
-  | {
-      kind: "unknown";
-      rawType: string;
-      rawSubtype?: string;
-      data: unknown;
-    };
-
-export type AgentMessageEventKind = AgentMessageEventData["kind"];
 
 export type AgentMessageMetadata = {
   createdAt?: string;
@@ -113,41 +84,19 @@ export type AgentEventPart = AgentDataPart<"event">;
 
 export type AgentResultPart = AgentDataPart<"result">;
 
-export type AgentToolProgressEvent = Extract<
+export type {
+  AgentMessageErrorEvent,
   AgentMessageEventData,
-  { kind: "tool-progress" }
->;
-
-export type AgentToolSummaryEvent = Extract<
-  AgentMessageEventData,
-  { kind: "tool-summary" }
->;
-
-export type AgentStatusEvent = Extract<
-  AgentMessageEventData,
-  { kind: "status" }
->;
-
-export type AgentFileBatchEvent = Extract<
-  AgentMessageEventData,
-  { kind: "file-batch" }
->;
-
-export type AgentFileBatchFile = AgentFileBatchEvent["files"][number];
-
-export type AgentFileBatchFailure = AgentFileBatchEvent["failed"][number];
-
-export type AgentStreamEvent = Extract<
-  AgentMessageEventData,
-  { kind: "stream" }
->;
-
-export type AgentErrorEvent = Extract<AgentMessageEventData, { kind: "error" }>;
-
-export type AgentUnknownEvent = Extract<
-  AgentMessageEventData,
-  { kind: "unknown" }
->;
+  AgentMessageEventKind,
+  AgentMessageFileBatchEvent,
+  AgentMessageFileBatchFailure,
+  AgentMessageFileBatchFile,
+  AgentMessageStatusEvent,
+  AgentMessageStreamEvent,
+  AgentMessageToolProgressEvent,
+  AgentMessageToolSummaryEvent,
+  AgentMessageUnknownEvent,
+};
 
 export type SessionChatPendingUserInputQuestion = {
   header: string;
