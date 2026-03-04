@@ -6,6 +6,16 @@ export type Incremental<T> =
   | {
       [P in keyof T]?: P extends " $fragmentName" | "__typename" ? T[P] : never;
     };
+/** Defined in: src/lib/agent-message-part-graphql-types.ts */
+export type AgentMessageDynamicToolPartState =
+  | "APPROVAL_REQUESTED"
+  | "APPROVAL_RESPONDED"
+  | "INPUT_AVAILABLE"
+  | "INPUT_STREAMING"
+  | "OUTPUT_AVAILABLE"
+  | "OUTPUT_DENIED"
+  | "OUTPUT_ERROR";
+
 /** Defined in: src/lib/session-chat-types.ts */
 export type AgentMessageMetadataProvider = "CLAUDE_AGENT_SDK";
 
@@ -16,7 +26,13 @@ export type AgentMessageMetadataStatus = "DONE" | "ERROR" | "IN_PROGRESS";
 export type AgentMessageMetadataVisibility = "DEFAULT" | "TRACE";
 
 /** Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts */
+export type AgentMessageReasoningPartState = "DONE" | "STREAMING";
+
+/** Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts */
 export type AgentMessageRole = "ASSISTANT" | "SYSTEM" | "USER";
+
+/** Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts */
+export type AgentMessageTextPartState = "DONE" | "STREAMING";
 
 /** Defined in: src/server/graphql/schema/session.ts */
 export type CreateSessionInput = {
@@ -276,7 +292,6 @@ export type SessionChatPageQueryQuery = {
         parts: Array<
           | {
               __typename: "AgentMessageDynamicToolPart";
-              type: string;
               toolName: string;
               toolCallId: string;
               title: string | null;
@@ -285,7 +300,7 @@ export type SessionChatPageQueryQuery = {
               output: unknown;
               errorText: string | null;
               preliminary: boolean | null;
-              toolState: string;
+              toolState: AgentMessageDynamicToolPartState;
               approval: {
                 id: string;
                 approved: boolean | null;
@@ -294,7 +309,6 @@ export type SessionChatPageQueryQuery = {
             }
           | {
               __typename: "AgentMessageEventPart";
-              type: string;
               eventData:
                 | {
                     __typename: "AgentMessageErrorEvent";
@@ -338,13 +352,11 @@ export type SessionChatPageQueryQuery = {
             }
           | {
               __typename: "AgentMessageReasoningPart";
-              type: string;
               text: string;
-              reasoningState: string | null;
+              reasoningState: AgentMessageReasoningPartState | null;
             }
           | {
               __typename: "AgentMessageResultPart";
-              type: string;
               resultData: {
                 subtype: string;
                 isError: boolean;
@@ -359,9 +371,8 @@ export type SessionChatPageQueryQuery = {
             }
           | {
               __typename: "AgentMessageTextPart";
-              type: string;
               text: string;
-              textState: string | null;
+              textState: AgentMessageTextPartState | null;
             }
         >;
       }>;
@@ -1243,10 +1254,6 @@ export const SessionChatPageQueryDocument = {
                                       selections: [
                                         {
                                           kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
                                           name: { kind: "Name", value: "text" },
                                         },
                                         {
@@ -1277,10 +1284,6 @@ export const SessionChatPageQueryDocument = {
                                       selections: [
                                         {
                                           kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
-                                        {
-                                          kind: "Field",
                                           name: { kind: "Name", value: "text" },
                                         },
                                         {
@@ -1309,10 +1312,6 @@ export const SessionChatPageQueryDocument = {
                                     selectionSet: {
                                       kind: "SelectionSet",
                                       selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
                                         {
                                           kind: "Field",
                                           name: {
@@ -1428,10 +1427,6 @@ export const SessionChatPageQueryDocument = {
                                     selectionSet: {
                                       kind: "SelectionSet",
                                       selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
                                         {
                                           kind: "Field",
                                           alias: {
@@ -1737,10 +1732,6 @@ export const SessionChatPageQueryDocument = {
                                     selectionSet: {
                                       kind: "SelectionSet",
                                       selections: [
-                                        {
-                                          kind: "Field",
-                                          name: { kind: "Name", value: "type" },
-                                        },
                                         {
                                           kind: "Field",
                                           alias: {

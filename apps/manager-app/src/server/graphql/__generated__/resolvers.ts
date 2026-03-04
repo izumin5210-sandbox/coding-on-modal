@@ -36,14 +36,31 @@ export function createResolvers({
   };
 }) {
   return {
+    AgentMessageDynamicToolPartState: {
+      INPUT_STREAMING: "input-streaming",
+      INPUT_AVAILABLE: "input-available",
+      APPROVAL_REQUESTED: "approval-requested",
+      APPROVAL_RESPONDED: "approval-responded",
+      OUTPUT_AVAILABLE: "output-available",
+      OUTPUT_ERROR: "output-error",
+      OUTPUT_DENIED: "output-denied",
+    },
+    AgentMessageReasoningPartState: {
+      STREAMING: "streaming",
+      DONE: "done",
+    },
+    AgentMessageTextPartState: {
+      STREAMING: "streaming",
+      DONE: "done",
+    },
     AgentMessageMetadataVisibility: {
       DEFAULT: "default",
       TRACE: "trace",
     },
     AgentMessageMetadataStatus: {
       ERROR: "error",
-      IN_PROGRESS: "in-progress",
       DONE: "done",
+      IN_PROGRESS: "in-progress",
     },
     AgentMessageMetadataProvider: {
       CLAUDE_AGENT_SDK: "claude-agent-sdk",

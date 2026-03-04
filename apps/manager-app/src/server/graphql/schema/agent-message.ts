@@ -1,77 +1,22 @@
 import type { IDString } from "@gqlkit-ts/runtime";
 import type {
   AgentMessageEventKind,
-  AgentDynamicToolPart as SharedAgentDynamicToolPart,
   AgentMessage as SharedAgentMessage,
   AgentMessageMetadata as SharedAgentMessageMetadata,
   AgentMessagePart as SharedAgentMessagePart,
   AgentMessageRole as SharedAgentMessageRole,
-  AgentReasoningPart as SharedAgentReasoningPart,
-  AgentRunMetrics as SharedAgentRunMetrics,
-  AgentRunResultData as SharedAgentRunResultData,
-  AgentTextPart as SharedAgentTextPart,
 } from "@/lib/session-chat-types";
 import { defineResolveType } from "../gqlkit";
 import type { AgentMessageEventData } from "./agent-message-events";
+import type { AgentMessagePart } from "./agent-message-parts";
+import type {
+  AgentMessageDynamicToolPart,
+  AgentMessageEventPart,
+  AgentMessageResultPart,
+} from "@/lib/agent-message-part-graphql-types";
 import type { JsonValue } from "./scalars";
 
 export type AgentMessageMetadata = SharedAgentMessageMetadata;
-
-export type AgentMessageTextPart = {
-  $typeName: "AgentMessageTextPart";
-  type: string;
-  text: SharedAgentTextPart["text"];
-  state?: string;
-};
-
-export type AgentMessageReasoningPart = {
-  $typeName: "AgentMessageReasoningPart";
-  type: string;
-  text: SharedAgentReasoningPart["text"];
-  state?: string;
-};
-
-export type AgentMessageDynamicToolPart = {
-  $typeName: "AgentMessageDynamicToolPart";
-  type: string;
-  toolName: SharedAgentDynamicToolPart["toolName"];
-  toolCallId: SharedAgentDynamicToolPart["toolCallId"];
-  title?: SharedAgentDynamicToolPart["title"];
-  providerExecuted?: SharedAgentDynamicToolPart["providerExecuted"];
-  state: string;
-  input?: JsonValue;
-  output?: JsonValue;
-  errorText?: string;
-  preliminary?: boolean;
-  approval?: {
-    id: string;
-    approved?: boolean;
-    reason?: string;
-  };
-};
-
-export type AgentMessageEventPart = {
-  $typeName: "AgentMessageEventPart";
-  type: string;
-  data: AgentMessageEventData;
-};
-
-export type AgentMessageResultMetrics = SharedAgentRunMetrics;
-
-export type AgentMessageResultData = SharedAgentRunResultData;
-
-export type AgentMessageResultPart = {
-  $typeName: "AgentMessageResultPart";
-  type: string;
-  data: AgentMessageResultData;
-};
-
-export type AgentMessagePart =
-  | AgentMessageDynamicToolPart
-  | AgentMessageEventPart
-  | AgentMessageReasoningPart
-  | AgentMessageResultPart
-  | AgentMessageTextPart;
 
 export type AgentMessage = Omit<
   SharedAgentMessage,
@@ -107,8 +52,33 @@ export const agentMessageEventDataResolveType =
     (value) => AGENT_MESSAGE_EVENT_TYPENAME_BY_KIND[value.kind],
   );
 
+type SupportedSharedAgentMessagePartType =
+  | "dynamic-tool"
+  | "data-event"
+  | "reasoning"
+  | "data-result"
+  | "text";
+
+type AgentMessagePartTypeName =
+  | "AgentMessageDynamicToolPart"
+  | "AgentMessageEventPart"
+  | "AgentMessageReasoningPart"
+  | "AgentMessageResultPart"
+  | "AgentMessageTextPart";
+
+const AGENT_MESSAGE_PART_TYPENAME_BY_TYPE = {
+  "dynamic-tool": "AgentMessageDynamicToolPart",
+  "data-event": "AgentMessageEventPart",
+  reasoning: "AgentMessageReasoningPart",
+  "data-result": "AgentMessageResultPart",
+  text: "AgentMessageTextPart",
+} as const satisfies Record<
+  SupportedSharedAgentMessagePartType,
+  AgentMessagePartTypeName
+>;
+
 export const agentMessagePartResolveType = defineResolveType<AgentMessagePart>(
-  (value) => value.$typeName,
+  (value) => AGENT_MESSAGE_PART_TYPENAME_BY_TYPE[value.type],
 );
 
 function toJsonValue(value: unknown): JsonValue {
@@ -143,22 +113,11 @@ function toMetadata(
 function toPart(part: SharedAgentMessagePart): AgentMessagePart {
   switch (part.type) {
     case "text":
-      return {
-        $typeName: "AgentMessageTextPart",
-        type: part.type,
-        text: part.text,
-        state: part.state,
-      };
+      return part;
     case "reasoning":
-      return {
-        $typeName: "AgentMessageReasoningPart",
-        type: part.type,
-        text: part.text,
-        state: part.state,
-      };
+      return part;
     case "dynamic-tool":
       return {
-        $typeName: "AgentMessageDynamicToolPart",
         type: part.type,
         toolName: part.toolName,
         toolCallId: part.toolCallId,
@@ -170,16 +129,14 @@ function toPart(part: SharedAgentMessagePart): AgentMessagePart {
         errorText: "errorText" in part ? part.errorText : undefined,
         preliminary: "preliminary" in part ? part.preliminary : undefined,
         approval: "approval" in part ? part.approval : undefined,
-      };
+      } satisfies AgentMessageDynamicToolPart;
     case "data-event":
       return {
-        $typeName: "AgentMessageEventPart",
         type: part.type,
         data: part.data,
-      };
+      } satisfies AgentMessageEventPart;
     case "data-result":
       return {
-        $typeName: "AgentMessageResultPart",
         type: part.type,
         data: {
           subtype: part.data.subtype,
@@ -187,7 +144,7 @@ function toPart(part: SharedAgentMessagePart): AgentMessagePart {
           summaryText: part.data.summaryText,
           metrics: part.data.metrics,
         },
-      };
+      } satisfies AgentMessageResultPart;
   }
 
   throw new Error(`Unsupported agent message part type: ${String(part)}`);

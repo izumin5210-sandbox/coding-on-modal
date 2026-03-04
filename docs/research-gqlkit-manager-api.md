@@ -265,7 +265,8 @@ Notes:
 - `route.ts` hosts Yoga and creates the gqlkit schema.
 - `src/lib/session-chat-types.ts` owns the exported `UIMessage` alias and the compact `data-event` / `data-result` payloads.
 - `src/lib/agent-message-event-types.ts` owns the canonical event union, including hidden `kind` discriminators for GraphQL resolution.
-- `schema/agent-message.ts` maps the shared chat message contract into GraphQL object and union types, while `schema/agent-message-events.ts` re-exports the shared event member types for gqlkit.
+- `src/lib/agent-message-part-graphql-types.ts` owns the shared GraphQL projection types for top-level message parts, including hidden `type` discriminators for GraphQL resolution.
+- `schema/agent-message.ts` provides the message wrapper and union `resolveType` functions, while `schema/agent-message-events.ts` and `schema/agent-message-parts.ts` re-export the shared member types for gqlkit.
 - Existing REST route handlers should be removed only after the UI is switched over.
 
 ## Migration Plan
@@ -277,7 +278,7 @@ Notes:
   - `reasoning` when available
   - `dynamic-tool`
   - typed `data-event` and `data-result` parts for trace/result/status payloads
-- Keep event `kind` in the shared runtime contract, but hide it from the GraphQL schema and reconstruct it from `__typename` in the web client.
+- Keep event `kind` and top-level part `type` in the shared runtime contract, but hide both from the GraphQL schema and reconstruct them from `__typename` in the web client.
 - Update the chat UI to read `UIMessage` parts instead of the current custom part union.
 
 ### Phase 2: Introduce GraphQL infrastructure

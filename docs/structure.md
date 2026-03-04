@@ -24,8 +24,9 @@
 - `apps/manager-app/src/server/graphql/context.ts`: GraphQL context creation with DB and authenticated viewer resolution.
 - `apps/manager-app/src/server/graphql/errors.ts`: Mapping of auth/domain/validation failures to GraphQL errors.
 - `apps/manager-app/src/server/graphql/scalars.ts`: Shared `GqlScalar` re-export surface for GraphQL `DateTime` and `JSON`.
-- `apps/manager-app/src/server/graphql/schema/agent-message.ts`: GraphQL object/union projection for Session chat messages derived from the shared AI SDK `UIMessage` contract; event unions resolve by hidden `kind` discriminators from shared `GqlObject` event types.
+- `apps/manager-app/src/server/graphql/schema/agent-message.ts`: GraphQL message wrapper projection plus `resolveType` functions for Session chat message unions; top-level parts resolve by hidden `type`, and event payloads resolve by hidden `kind`.
 - `apps/manager-app/src/server/graphql/schema/agent-message-events.ts`: gqlkit schema export surface for shared event union member types used by `AgentMessageEventData`.
+- `apps/manager-app/src/server/graphql/schema/agent-message-parts.ts`: gqlkit schema export surface for shared top-level message part member types used by `AgentMessagePart`.
 - `apps/manager-app/src/server/graphql/schema/session.ts`: GraphQL Session query fields plus Session lifecycle/exec mutations.
 - `apps/manager-app/src/server/graphql/schema/viewer.ts`: GraphQL viewer query plus Claude API key save mutation.
 - `apps/manager-app/src/server/graphql/schema/session-chat.ts`: GraphQL chat query/mutation fields and pending-user-input projection types.
@@ -55,6 +56,7 @@
 - `apps/manager-app/src/lib/graphql/session-chat.ts`: Session chat query/mutation hooks plus GraphQL-to-UIMessage mapping helpers for the shared `dynamic-tool` / `data-event` / `data-result` model.
 - `apps/manager-app/src/lib/graphql-scalar-types.ts`: Shared `GqlScalar` type definitions reused by both UI-facing shared types and gqlkit schema exports.
 - `apps/manager-app/src/lib/agent-message-event-types.ts`: Canonical Session chat event union definitions built as shared `GqlObject` types with hidden `kind` discriminators for GraphQL resolution.
+- `apps/manager-app/src/lib/agent-message-part-graphql-types.ts`: Shared GraphQL projection types for top-level Session chat message parts built as `GqlObject` types with hidden `type` discriminators.
 - `apps/manager-app/src/lib/session-types.ts`: Shared UI/API type definitions.
 - `apps/manager-app/src/lib/session-chat-types.ts`: Shared Session chat UI-facing type definitions built around AI SDK `UIMessage`, using a reduced `data-event` / `data-result` part taxonomy as the canonical public contract.
 

@@ -191,17 +191,14 @@ export const sessionChatPageDocument = graphql(`
           parts {
             __typename
             ... on AgentMessageTextPart {
-              type
               text
               textState: state
             }
             ... on AgentMessageReasoningPart {
-              type
               text
               reasoningState: state
             }
             ... on AgentMessageDynamicToolPart {
-              type
               toolName
               toolCallId
               title
@@ -218,7 +215,6 @@ export const sessionChatPageDocument = graphql(`
               }
             }
             ... on AgentMessageEventPart {
-              type
               eventData: data {
                 __typename
                 ... on AgentMessageToolProgressEvent {
@@ -261,7 +257,6 @@ export const sessionChatPageDocument = graphql(`
               }
             }
             ... on AgentMessageResultPart {
-              type
               resultData: data {
                 subtype
                 isError

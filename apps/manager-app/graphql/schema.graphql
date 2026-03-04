@@ -18,7 +18,7 @@ type AgentMessage {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageDynamicToolPart {
   approval: AgentMessageDynamicToolPartApproval
@@ -27,20 +27,32 @@ type AgentMessageDynamicToolPart {
   output: JSON
   preliminary: Boolean
   providerExecuted: Boolean
-  state: String!
+  state: AgentMessageDynamicToolPartState!
   title: String
   toolCallId: String!
   toolName: String!
-  type: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageDynamicToolPartApproval {
   approved: Boolean
   id: String!
   reason: String
+}
+
+"""
+Defined in: src/lib/agent-message-part-graphql-types.ts
+"""
+enum AgentMessageDynamicToolPartState {
+  INPUT_STREAMING
+  INPUT_AVAILABLE
+  APPROVAL_REQUESTED
+  APPROVAL_RESPONDED
+  OUTPUT_AVAILABLE
+  OUTPUT_ERROR
+  OUTPUT_DENIED
 }
 
 """
@@ -64,11 +76,10 @@ union AgentMessageEventData =
   | AgentMessageUnknownEvent
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageEventPart {
   data: AgentMessageEventData
-  type: String!
 }
 
 """
@@ -128,8 +139,8 @@ Defined in: src/lib/session-chat-types.ts
 """
 enum AgentMessageMetadataStatus {
   ERROR
-  IN_PROGRESS
   DONE
+  IN_PROGRESS
 }
 
 """
@@ -141,7 +152,7 @@ enum AgentMessageMetadataVisibility {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 union AgentMessagePart =
   | AgentMessageDynamicToolPart
@@ -151,16 +162,38 @@ union AgentMessagePart =
   | AgentMessageTextPart
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageReasoningPart {
-  state: String
+  """
+  The provider metadata.
+  """
+  providerMetadata: AgentMessageReasoningPartProviderMetadata
+  """
+  The state of the reasoning part.
+  """
+  state: AgentMessageReasoningPartState
+  """
+  The reasoning text.
+  """
   text: String!
-  type: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts
+"""
+type AgentMessageReasoningPartProviderMetadata
+
+"""
+Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts
+"""
+enum AgentMessageReasoningPartState {
+  STREAMING
+  DONE
+}
+
+"""
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageResultData {
   isError: Boolean!
@@ -180,25 +213,14 @@ type AgentMessageResultDataMetrics {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
-"""
-type AgentMessageResultMetrics {
-  durationApiMs: Float
-  durationMs: Float
-  numTurns: Float
-  totalCostUsd: Float
-}
-
-"""
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageResultPart {
   data: AgentMessageResultPartData!
-  type: String!
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/lib/agent-message-part-graphql-types.ts
 """
 type AgentMessageResultPartData {
   isError: Boolean!
@@ -243,12 +265,34 @@ type AgentMessageStreamEvent {
 }
 
 """
-Defined in: src/server/graphql/schema/agent-message.ts
+Defined in: src/server/graphql/schema/agent-message-parts.ts
 """
 type AgentMessageTextPart {
-  state: String
+  """
+  The provider metadata.
+  """
+  providerMetadata: AgentMessageTextPartProviderMetadata
+  """
+  The state of the text part.
+  """
+  state: AgentMessageTextPartState
+  """
+  The text content.
+  """
   text: String!
-  type: String!
+}
+
+"""
+Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts
+"""
+type AgentMessageTextPartProviderMetadata
+
+"""
+Defined in: ../../node_modules/.pnpm/ai@6.0.97_zod@4.3.6/node_modules/ai/dist/index.d.ts
+"""
+enum AgentMessageTextPartState {
+  STREAMING
+  DONE
 }
 
 """
